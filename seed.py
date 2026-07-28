@@ -5,17 +5,24 @@ Popula o banco com o catálogo extraído do seu Excel atual
 URLs de 3DLAB e F3D descobertas em 28/07/2026 varrendo o catálogo público
 de cada loja (páginas /loja/ do 3DLAB, paginação ?page=N do F3D) e
 confirmando cada URL candidata com HTTP 200 antes de cadastrar. A maioria é
-correspondência exata de cor; onde a loja não vende a cor exata do
-catálogo original, a URL marcada "aprox." é a mais próxima disponível —
-revisar visualmente antes de aceitar o preço como válido:
+correspondência exata de cor. Onde a loja não vende a cor exata do
+catálogo original, as fotos de produto das 3 lojas foram comparadas lado a
+lado (28/07/2026) para validar a aproximação:
   - PLA Azul/Verde "(CTP)": o "(CTP)" no nome não bate com nenhum atributo
     encontrado nas 3 lojas (provável nota interna da Cilla Tech Park, não
-    um atributo do produto) — tratado como PLA Azul/Verde comum.
-  - 3DLAB PLA Rosa: só existe "rosa bebê" no catálogo da loja — aprox.
-  - 3DLAB PETG Azul/Laranja/Verde: só existem na linha "UV translúcido"
-    (cores translúcidas, não opacas) — aprox., revisar se serve.
+    um atributo do produto) — tratado como PLA Azul/Verde comum. Fotos
+    conferem: mesmo tom de azul/verde nas 3 lojas.
+  - 3DLAB PLA Rosa: usa "Rosa Pop Art" (rosa vivo/magenta) — bate com a
+    foto do 3DFILA e do F3D. **Cuidado:** a URL óbvia pelo slug seria
+    "filamento-pla-rosa-bebe", mas essa é foto de rosa bebê pálido (o
+    produto foi renomeado para "Rosa Blush", a URL antiga ficou); não usar.
+  - 3DLAB PETG Azul/Laranja/Verde: só existem na linha "UV translúcido" —
+    fotos conferidas lado a lado com 3DFILA/F3D, mesmo tom de cor nas 3
+    lojas. Ainda vale reconferir na prática porque "translúcido" pode se
+    comportar diferente ao imprimir (deixa passar mais luz) mesmo com a
+    cor batendo na foto do carretel.
   - F3D PETG Laranja: só existe como "laranja painel elétrico" (laranja de
-    segurança) — aprox., revisar se serve.
+    segurança) — foto conferida, mesmo tom de laranja que 3DFILA/3DLAB.
 
 Sem URL, o coletor não tenta aquele fornecedor pra aquele item (não existe
 fallback de "adivinhar o produto").
@@ -61,7 +68,7 @@ ITENS = [
      "https://www.filamentos3dbrasil.com.br/produtos/filamento-pla-premium-lilas/"),
     ("PLA Rosa", 2, "PLA", 60, 150,
      "https://3dfila.com.br/produto/filamento-pla-rosa/",
-     "https://3dlab.com.br/produto/filamento-pla-rosa-bebe/",  # aprox. — só "rosa bebê" na loja
+     "https://3dlab.com.br/produto/filamento-pla-rosa-pop/",  # aprox. — "Rosa Pop Art", bate com foto do 3DFILA/F3D
      "https://www.filamentos3dbrasil.com.br/produtos/filamento-pla-premium-rosa/"),
     ("PLA Marrom", 2, "PLA", 60, 150,
      "https://3dfila.com.br/produto/filamento-pla-marrom-chocolate-175mm/",
