@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+cotacoes.db
+mapa_de_cotacao_*.xlsx
+.streamlit/
