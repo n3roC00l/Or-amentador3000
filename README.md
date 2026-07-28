@@ -31,10 +31,39 @@
   partir de dados reais coletados. A coluna "ORÇAMENTO MAIS ECONÔMICO"
   calcula o MIN de verdade (testado com a 3DLAB ficando mais barata que a
   3DFILA em alguns itens de fato).
-- **`validacao.py`** e **`streamlit_app.py`**: sintaxe conferida; a lógica
-  de faixa e a tabela de comparação foram exercitadas indiretamente pelo
-  `collector.py` acima, mas a interface Streamlit em si ainda não foi
-  aberta num navegador.
+- **`validacao.py`**: sintaxe conferida; a lógica de faixa foi exercitada
+  indiretamente pelo `collector.py` acima.
+- **`streamlit_app.py` (interface "Cilla Tech Park")**: reformulada e
+  aberta de verdade num navegador (Chromium headless via CDP) — testes
+  visuais confirmaram cada peça abaixo funcionando com dados reais:
+  - **Cotação ao vivo com cache de 15 min**: ao abrir a tela, se a última
+    coleta salva tiver mais de `LIMITE_FRESCOR_MIN` (15 min), ela dispara
+    `collector.coletar_tudo()` sozinha, com barra de progresso e log linha
+    a linha (ver `st.status`). Um botão "🔄 Atualizar agora" força a busca
+    a qualquer momento. Testado: rodou a coleta nas 3 lojas reais dentro da
+    tela e o selo de status virou "🟢 atualizado agora mesmo" ao terminar.
+  - **`collector.coletar_tudo(progress_callback=...)`**: agora aceita um
+    callback de progresso (chamado a cada item/fornecedor processado) —
+    é o que a interface usa para a barra ao vivo, em vez de rodar o
+    coletor como subprocesso.
+  - **Retry em cima do bloqueio intermitente do 3DLAB**: `collector.py`
+    agora tenta de novo (até 2x) quando um scraper leva 403, e qualquer
+    outro erro de rede vira `falha` numa linha só, em vez de derrubar a
+    coleta inteira — corrige um bug real: antes, uma exceção de rede não
+    tratada (`requests.exceptions.HTTPError`/`RequestException`) por fora
+    de `ErroColeta` quebrava `coletar_tudo()` no meio do processamento.
+  - **Único campo editável é a quantidade**: tabela via `st.data_editor`
+    com todas as colunas travadas (`disabled=True`) exceto "Qtd". Editar
+    grava direto em `itens.quantidade` (`db.atualizar_quantidade`) e
+    recalcula o total na hora — **sem** disparar nova coleta (testado:
+    editar quantidade não muda o selo "atualizado há X min", só o valor
+    do total). `export_excel.py` já lê a quantidade do banco, então a
+    planilha exportada reflete a edição automaticamente.
+  - **Identidade visual "Cilla Tech Park"**: cabeçalho com a marca, selo de
+    status colorido (🟢/🔵/🔴) e KPIs no topo (total mais econômico,
+    leituras ok/suspeitas/sem preço), usando a paleta de status validada
+    pela skill de dataviz (verde `#0ca30c` / amarelo `#fab219` / vermelho
+    `#d03b3b`) em vez de cores escolhidas a dedo.
 
 ## O que ainda falta revisar
 1. **Confirmar as URLs "aprox."** listadas nos comentários de `seed.py`
@@ -45,9 +74,7 @@
    no carrinho — o preço capturado é sempre o unitário sem desconto,
    marcado `suspeito` de propósito. Validar contra um carrinho real antes
    de fechar compra.
-3. **Abrir a interface** (`streamlit run streamlit_app.py`) e conferir a
-   tabela de comparação e a exportação na prática, num navegador.
-4. **Ajustar `faixa_min`/`faixa_max`** em `seed.py` — hoje são só um ponto
+3. **Ajustar `faixa_min`/`faixa_max`** em `seed.py` — hoje são só um ponto
    de partida do arquivo antigo; os preços reais coletados (R$89-150 em
    PLA, R$89-146 em PETG) já dão uma calibração melhor.
 

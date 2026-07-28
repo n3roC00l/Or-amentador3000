@@ -40,6 +40,23 @@ def cotacoes_mais_recentes(conn: sqlite3.Connection):
     """).fetchall()
 
 
+def ultima_coleta_geral(conn: sqlite3.Connection):
+    """
+    Timestamp (ISO 8601, string) da coleta mais recente entre TODOS os
+    itens/fornecedores — usado só para decidir se os dados na tela estão
+    "frescos" ou precisam de um novo `collector.coletar_tudo()`. None se
+    a tabela `cotacoes` ainda estiver vazia.
+    """
+    row = conn.execute("SELECT MAX(coletado_em) AS ultima FROM cotacoes").fetchone()
+    return row["ultima"] if row else None
+
+
+def atualizar_quantidade(conn: sqlite3.Connection, item_id: int, nova_quantidade: float):
+    """Único campo do catálogo editável pela interface — tudo o mais é travado."""
+    conn.execute("UPDATE itens SET quantidade = ? WHERE id = ?", (nova_quantidade, item_id))
+    conn.commit()
+
+
 if __name__ == "__main__":
     inicializar()
     print(f"Banco inicializado em {DB_PATH}")
