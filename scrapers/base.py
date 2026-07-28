@@ -23,9 +23,14 @@ class ResultadoColeta:
 
 
 HEADERS = {
+    # ASCII puro de propósito: caracteres acentuados neste header derrubam a
+    # requisição com 403 no WAF (Cloudflare) da 3DLAB — confirmado em
+    # 28/07/2026 comparando a mesma URL lado a lado, só variando acento vs
+    # sem acento no texto abaixo. 3DFILA e F3D não pareciam se importar, mas
+    # o header é compartilhado pelos três, então fica ASCII para todos.
     "User-Agent": (
         "Mozilla/5.0 (compatible; CTP-CotacaoBot/1.0; "
         "+https://cillatechpark.com.br) "
-        "coleta de preços para cotação interna, uso não comercial"
+        "coleta de precos para cotacao interna, uso nao comercial"
     )
 }

@@ -1,57 +1,55 @@
 # Cotação de filamentos — agente + interface + exportação
 
-## O que já está pronto e testado
+## O que já está pronto e testado (28/07/2026 — validado contra as 3 lojas de verdade)
 - **Banco (`schema.sql` / `db.py`)**: SQLite como fonte de verdade. Testado.
-- **Catálogo (`seed.py`)**: os 16 itens do seu arquivo atual, com as URLs de
-  produto do 3DFILA (só ele tinha URL por item no arquivo original — 3DLAB
-  e F3D saem sem URL, precisam ser cadastradas). Testado.
-- **`export_excel.py`**: gera o Mapa de Cotação no layout do modelo atual.
-  **A coluna "ORÇAMENTO MAIS ECONÔMICO" agora calcula o MIN de verdade** —
-  testei forçando um caso onde a 3DLAB fica mais barata que a 3DFILA e a
-  fórmula segue o preço corretamente, em vez de ficar presa na primeira
-  coluna como no arquivo original. Rodei `recalc.py` do skill de xlsx:
-  0 erros de fórmula.
-- **F3D (`scrapers/f3d.py`)**: a loja expõe o preço numa meta tag própria
-  (`nuvemshop:price`) — parser simples e confiável, confirmado contra a
-  página real do produto.
-- **Coletor (`collector.py`)**, **validação de faixa (`validacao.py`)** e
-  **interface (`streamlit_app.py`)**: escritos e com sintaxe conferida, mas
-  **não testados contra as lojas de verdade** — ver próxima seção.
+- **Catálogo (`seed.py`)**: os 16 itens do arquivo original, agora com URL
+  de produto cadastrada para os **3 fornecedores** (3DFILA, 3DLAB, F3D) —
+  48 URLs no total, todas conferidas com HTTP 200 antes de cadastrar. Onde
+  a loja não vende a cor exata do catálogo original, a URL mais próxima
+  disponível foi marcada como "aprox." direto no comentário do arquivo
+  (ex.: 3DLAB só tem "PETG UV translúcido", não PETG opaco, nas cores
+  azul/laranja/verde) — revisar essas antes de confiar 100% no preço.
+- **`scrapers/base.py`**: **bug real encontrado e corrigido** — o
+  `User-Agent` tinha acentos (ç/ã/õ) e isso derrubava toda requisição pro
+  3DLAB com 403 (WAF Cloudflare rejeita header com bytes não-ASCII).
+  Confirmado lado a lado: mesma URL, mesmo texto, só tirando o acento já
+  vira 200. Corrigido para ASCII puro.
+- **Os 3 scrapers (`f3d.py`, `dfila.py`, `lab3d.py`)**: rodados de verdade
+  contra páginas de produto reais das 3 lojas. `dfila.py` conferido byte a
+  byte contra o JSON de variações bruto (variante 1kg = R$89,90, bate
+  exato). `lab3d.py` também confirmado (variante 1kg encontrada, marcada
+  `suspeito` como projetado, por causa do desconto por volume). `f3d.py`
+  detecta corretamente produto sem estoque via `nuvemshop:stock=0`.
+  **3DLAB tem rate-limiting intermitente (Cloudflare)** — rajadas de
+  requisições levam a 403 esporádicos que passam a funcionar de novo
+  segundos depois; o coletor não tem retry automático hoje, então uma
+  falha pontual do 3DLAB no meio de uma coleta é esperada, não é bug.
+- **`collector.py`**: rodado de ponta a ponta contra as 3 lojas reais com
+  as 48 URLs — 0 falhas, 24 leituras `ok`, 24 `suspeito` (todo o 3DLAB por
+  design + metade do F3D por falta de estoque sinalizada nesse momento).
+- **`export_excel.py`**: gera o Mapa de Cotação no layout do modelo atual a
+  partir de dados reais coletados. A coluna "ORÇAMENTO MAIS ECONÔMICO"
+  calcula o MIN de verdade (testado com a 3DLAB ficando mais barata que a
+  3DFILA em alguns itens de fato).
+- **`validacao.py`** e **`streamlit_app.py`**: sintaxe conferida; a lógica
+  de faixa e a tabela de comparação foram exercitadas indiretamente pelo
+  `collector.py` acima, mas a interface Streamlit em si ainda não foi
+  aberta num navegador.
 
-## O que ainda precisa ser validado — e por quê
-Este ambiente onde o código foi escrito não tem acesso de rede a lojas
-externas (só a busca/leitura de texto via ferramentas do Claude, não a
-requisições HTTP arbitrárias que os scrapers fazem). Isso significa:
-
-1. **`scrapers/dfila.py` e `scrapers/lab3d.py` não foram testados contra o
-   HTML bruto real.** A lógica foi desenhada em cima do padrão conhecido do
-   WooCommerce (bloco `data-product_variations` com JSON de variantes), mas
-   preciso que você rode:
-   ```
-   python -m scrapers.dfila https://3dfila.com.br/produto/filamento-pla-amarelo/
-   python -m scrapers.lab3d https://3dlab.com.br/produto/filamento-pla-azul/
-   ```
-   e confira se o preço bate com o carrinho de verdade (peso 1kg). Se der
-   `ErroColeta` dizendo que o bloco de variações não foi encontrado, o tema
-   do site carrega isso via AJAX e o próximo passo é trocar para Playwright.
-
-2. **Achei dois problemas de precisão reais nas lojas, documentados nos
-   comentários de cada arquivo:**
-   - **3DFila**: o preço "em destaque" da página é da variante mais barata
-     (ex.: amostra de 75g pode aparecer como "a partir de R$5,90"), não do
-     carretel de 1kg. Sem resolver a variante certa, o preço capturado
-     seria completamente errado — por isso o parser falha explicitamente
-     se não conseguir confirmar a variante de 1kg, em vez de arriscar.
-   - **3D Lab**: tem desconto por volume que soma a quantidade de **todas
-     as cores da mesma categoria** no carrinho — não dá pra saber isso
-     olhando um produto isolado. O parser captura o preço unitário sem
-     esse desconto e marca a leitura como `suspeito`, nunca `ok`, até
-     alguém revisar.
-
-3. **URLs de produto do 3DLAB e F3D não estão cadastradas** (o arquivo
-   original só tinha por item para o 3DFILA). Sem URL, o coletor não tenta
-   aquele fornecedor para aquele item — não existe "adivinhação" de
-   produto. Posso ajudar a descobrir e confirmar essas URLs.
+## O que ainda falta revisar
+1. **Confirmar as URLs "aprox."** listadas nos comentários de `seed.py`
+   (PLA Rosa no 3DLAB, PETG Azul/Laranja/Verde no 3DLAB, PETG Laranja no
+   F3D) — são a cor mais próxima disponível, não a cor exata do catálogo
+   original.
+2. **3D Lab**: desconto por volume soma todas as cores da mesma categoria
+   no carrinho — o preço capturado é sempre o unitário sem desconto,
+   marcado `suspeito` de propósito. Validar contra um carrinho real antes
+   de fechar compra.
+3. **Abrir a interface** (`streamlit run streamlit_app.py`) e conferir a
+   tabela de comparação e a exportação na prática, num navegador.
+4. **Ajustar `faixa_min`/`faixa_max`** em `seed.py` — hoje são só um ponto
+   de partida do arquivo antigo; os preços reais coletados (R$89-150 em
+   PLA, R$89-146 em PETG) já dão uma calibração melhor.
 
 ## Como rodar (na sua máquina, com rede de verdade)
 ```
@@ -60,8 +58,3 @@ python seed.py            # popula o catálogo (uma vez)
 python collector.py       # roda a coleta de preços
 streamlit run streamlit_app.py   # abre a interface de comparação/exportação
 ```
-
-## Próximo passo sugerido
-Rodar os dois comandos de validação do item 1 acima contra 1-2 produtos
-reais e me trazer o resultado (ou o erro) — a partir disso eu ajusto o
-parser certo em vez de ficar adivinhando a estrutura do HTML.
