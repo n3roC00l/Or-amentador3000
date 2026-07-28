@@ -27,9 +27,16 @@ lado (28/07/2026) para validar a aproximação:
 Sem URL, o coletor não tenta aquele fornecedor pra aquele item (não existe
 fallback de "adivinhar o produto").
 
-Faixas de preço (faixa_min/faixa_max) são um ponto de partida, calibrado
-pelos valores que já apareciam no seu arquivo — ajuste conforme o
-histórico real for aparecendo.
+Faixas de preço (faixa_min/faixa_max) recalibradas em 28/07/2026 com base
+nos preços reais coletados nas 3 lojas (ver `cotacoes`), não mais nos
+valores do Excel antigo. Faixa = observado ±(20-25%) de margem — larga o
+bastante pra não acusar promoção/reajuste normal, justa o bastante pra
+pegar erro de parser de verdade (ex.: capturar a variante de amostra em
+vez do carretel de 1kg):
+  - PLA: observado R$89,90–R$99,90 nas 3 lojas → faixa 65–120
+  - PETG: observado R$89,90–R$146,49 (o teto é a linha "UV translúcido" do
+    3DLAB, mais cara de propósito, não erro) → faixa 70–170
+  - ABS: observado R$74,90–R$99,90 → faixa 55–120
 """
 from db import conectar, inicializar
 
@@ -40,69 +47,73 @@ FORNECEDORES = [
     ("F3D", "https://www.filamentos3dbrasil.com.br/", "à vista", "15 dias", 67.4),
 ]
 
-# especificacao, quantidade, categoria, faixa_min, faixa_max, url_3dfila, url_3dlab, url_f3d
+FAIXA_PLA = (65, 120)
+FAIXA_PETG = (70, 170)
+FAIXA_ABS = (55, 120)
+
+# especificacao, quantidade, categoria, faixa, url_3dfila, url_3dlab, url_f3d
 ITENS = [
-    ("PLA Amarelo", 3, "PLA", 60, 150,
+    ("PLA Amarelo", 3, "PLA", FAIXA_PLA,
      "https://3dfila.com.br/produto/filamento-pla-amarelo/",
      "https://3dlab.com.br/produto/filamento-pla-amarelo/",
      "https://www.filamentos3dbrasil.com.br/produtos/filamento-pla-premium-amarelo/"),
-    ("PLA Azul (CTP)", 5, "PLA", 60, 150,
+    ("PLA Azul (CTP)", 5, "PLA", FAIXA_PLA,
      "https://3dfila.com.br/produto/filamento-pla-azul-cobalto-175mm/",
      "https://3dlab.com.br/produto/filamento-pla-azul/",
      "https://www.filamentos3dbrasil.com.br/produtos/filamento-pla-premium-azul/"),
-    ("PLA Verde (CTP)", 5, "PLA", 60, 150,
+    ("PLA Verde (CTP)", 5, "PLA", FAIXA_PLA,
      "https://3dfila.com.br/produto/filamento-pla-verde/",
      "https://3dlab.com.br/produto/filamento-pla-verde/",
      "https://www.filamentos3dbrasil.com.br/produtos/filamento-pla-premium-verde/"),
-    ("PLA Vermelho", 3, "PLA", 60, 150,
+    ("PLA Vermelho", 3, "PLA", FAIXA_PLA,
      "https://3dfila.com.br/produto/filamento-pla-vermelho/",
      "https://3dlab.com.br/produto/filamento-pla-vermelho/",
      "https://www.filamentos3dbrasil.com.br/produtos/filamento-pla-premium-vermelho/"),
-    ("PLA Laranja", 2, "PLA", 60, 150,
+    ("PLA Laranja", 2, "PLA", FAIXA_PLA,
      "https://3dfila.com.br/produto/filamento-pla-laranja/",
      "https://3dlab.com.br/produto/filamento-pla-laranja/",
      "https://www.filamentos3dbrasil.com.br/produtos/filamento-pla-premium-laranja/"),
-    ("PLA Lilás", 2, "PLA", 60, 150,
+    ("PLA Lilás", 2, "PLA", FAIXA_PLA,
      "https://3dfila.com.br/produto/filamento-pla-lilas-175mm/",
      "https://3dlab.com.br/produto/filamento-pla-lilas/",
      "https://www.filamentos3dbrasil.com.br/produtos/filamento-pla-premium-lilas/"),
-    ("PLA Rosa", 2, "PLA", 60, 150,
+    ("PLA Rosa", 2, "PLA", FAIXA_PLA,
      "https://3dfila.com.br/produto/filamento-pla-rosa/",
      "https://3dlab.com.br/produto/filamento-pla-rosa-pop/",  # aprox. — "Rosa Pop Art", bate com foto do 3DFILA/F3D
      "https://www.filamentos3dbrasil.com.br/produtos/filamento-pla-premium-rosa/"),
-    ("PLA Marrom", 2, "PLA", 60, 150,
+    ("PLA Marrom", 2, "PLA", FAIXA_PLA,
      "https://3dfila.com.br/produto/filamento-pla-marrom-chocolate-175mm/",
      "https://3dlab.com.br/produto/filamento-pla-marrom/",
      "https://www.filamentos3dbrasil.com.br/produtos/filamento-pla-premium-marrom/"),
-    ("PLA Preto", 5, "PLA", 60, 150,
+    ("PLA Preto", 5, "PLA", FAIXA_PLA,
      "https://3dfila.com.br/produto/filamento-pla-preto/",
      "https://3dlab.com.br/produto/filamento-pla-preto/",
      "https://www.filamentos3dbrasil.com.br/produtos/filamento-pla-premium-preto/"),
-    ("PLA Branco", 5, "PLA", 60, 150,
+    ("PLA Branco", 5, "PLA", FAIXA_PLA,
      "https://3dfila.com.br/produto/filamento-pla-branco/",
      "https://3dlab.com.br/produto/filamento-pla-branco/",
      "https://www.filamentos3dbrasil.com.br/produtos/filamento-pla-premium-branco/"),
-    ("PETG Azul", 3, "PETG", 70, 180,
+    ("PETG Azul", 3, "PETG", FAIXA_PETG,
      "https://3dfila.com.br/produto/filamento-petg-xt-azul-caneta-175mm/",
      "https://3dlab.com.br/produto/filamento-petg-uv-azul-translucido-3d-lab/",  # aprox. — linha UV translúcida
      "https://www.filamentos3dbrasil.com.br/produtos/filamento-petg-azul/"),
-    ("PETG Preto", 5, "PETG", 70, 180,
+    ("PETG Preto", 5, "PETG", FAIXA_PETG,
      "https://3dfila.com.br/produto/filamento-petg-preto/",
      "https://3dlab.com.br/produto/filamento-petg-preto/",
      "https://www.filamentos3dbrasil.com.br/produtos/filamento-petg-preto/"),
-    ("PETG Branco", 5, "PETG", 70, 180,
+    ("PETG Branco", 5, "PETG", FAIXA_PETG,
      "https://3dfila.com.br/produto/filamento-petg-branco/",
      "https://3dlab.com.br/produto/filamento-petg-branco/",
      "https://www.filamentos3dbrasil.com.br/produtos/filamento-petg-branco/"),
-    ("PETG Laranja", 2, "PETG", 70, 180,
+    ("PETG Laranja", 2, "PETG", FAIXA_PETG,
      "https://3dfila.com.br/produto/filamento-petg-xt-laranja-175mm/",
      "https://3dlab.com.br/produto/filamento-petg-uv-laranja-translucido/",  # aprox. — linha UV translúcida
      "https://www.filamentos3dbrasil.com.br/produtos/filamento-petg-laranja-painel-eletrico/"),  # aprox. — laranja de segurança
-    ("PETG Verde", 2, "PETG", 70, 180,
+    ("PETG Verde", 2, "PETG", FAIXA_PETG,
      "https://3dfila.com.br/produto/filamento-petg-xt-verde-175mm/",
      "https://3dlab.com.br/produto/filamento-petg-uv-verde-translucido/",  # aprox. — linha UV translúcida
      "https://www.filamentos3dbrasil.com.br/produtos/filamento-petg-verde/"),
-    ("ABS Preto", 3, "ABS", 60, 160,
+    ("ABS Preto", 3, "ABS", FAIXA_ABS,
      "https://3dfila.com.br/produto/filamento-abs-preto-sepia-premium-175mm/",
      "https://3dlab.com.br/produto/filamento-abs-premium-preto/",
      "https://www.filamentos3dbrasil.com.br/produtos/filamento-abs-premium-preto/"),
@@ -123,11 +134,19 @@ def seed():
         )
         fornecedor_id[nome] = ordem
 
-    for ordem, (spec, qtd, categoria, fmin, fmax, url_3dfila, url_3dlab, url_f3d) in enumerate(ITENS, start=1):
+    for ordem, (spec, qtd, categoria, faixa, url_3dfila, url_3dlab, url_f3d) in enumerate(ITENS, start=1):
+        fmin, fmax = faixa
         cur.execute(
             "INSERT OR IGNORE INTO itens (id, ordem, especificacao, quantidade, unidade, categoria, faixa_min, faixa_max) "
             "VALUES (?, ?, ?, ?, 'UN', ?, ?, ?)",
             (ordem, ordem, spec, qtd, categoria, fmin, fmax),
+        )
+        # o item já pode existir de uma seed anterior (INSERT OR IGNORE não
+        # atualiza) — sincroniza a faixa mesmo assim, sem tocar em
+        # quantidade (editável pela interface) nem no histórico de cotações
+        cur.execute(
+            "UPDATE itens SET faixa_min = ?, faixa_max = ? WHERE id = ?",
+            (fmin, fmax, ordem),
         )
         for nome_fornecedor, url in (("3DFILA", url_3dfila), ("3DLAB", url_3dlab), ("F3D", url_f3d)):
             cur.execute(
