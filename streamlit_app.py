@@ -173,7 +173,13 @@ def _tabela_filamentos(lista, incluir_kg=True):
 # ============================================================ ESTOQUE ====
 with aba_estoque:
     conn = conectar()
-    filamentos = estoque.listar_filamentos(conn)
+    # dict, não sqlite3.Row: os selectbox abaixo usam a própria linha do
+    # filamento como opção (não uma string derivada como chave de dict — ver
+    # comentário no form de movimento), e o Streamlit precisa conseguir
+    # fazer deepcopy do valor do widget pra guardar em session_state.
+    # sqlite3.Row não suporta isso (TypeError: cannot pickle 'sqlite3.Row'
+    # object — encontrado rodando a suíte de regressão, não só em teoria).
+    filamentos = [dict(f) for f in estoque.listar_filamentos(conn)]
     conn.close()
 
     # separador de milhar em vírgula por padrão, igual às colunas das tabelas
@@ -245,8 +251,19 @@ with aba_estoque:
         if filamentos:
             with st.form("form_movimento"):
                 _titulo_secao("swap_horiz", "Registrar entrada/saída")
-                opcoes = {f"{f['material']} {f['cor']} (saldo {f['saldo_g']:.0f} g)": f["id"] for f in filamentos}
-                escolha = st.selectbox("Filamento", list(opcoes.keys()))
+                # a opção do selectbox é a própria linha do filamento (não uma
+                # string "Material Cor (saldo X g)" usada como chave de dict) —
+                # essa string embutia o saldo, que muda toda hora; se o saldo
+                # mudasse entre o filamento aparecer na tela e o form ser
+                # enviado (ex.: outra aba/pessoa mexendo no mesmo estoque), a
+                # string selecionada deixava de bater com qualquer opção nova
+                # e o Streamlit reseta a seleção pro primeiro item da lista
+                # silenciosamente — risco de registrar o movimento no
+                # filamento errado sem aviso nenhum.
+                escolha = st.selectbox(
+                    "Filamento", filamentos, key="select_movimento",
+                    format_func=lambda f: f"{f['material']} {f['cor']} (saldo {f['saldo_g']:.0f} g)",
+                )
                 tipo = st.radio("Tipo", ["entrada", "saida"], horizontal=True, format_func=lambda t: "Entrada" if t == "entrada" else "Saída")
                 quantidade = st.number_input("Quantidade (g)", min_value=0.0, step=50.0)
                 motivo = st.text_input("Motivo", placeholder="ex.: compra 3DFILA NF 1234, consumo peça X")
@@ -255,7 +272,7 @@ with aba_estoque:
                         st.error("Quantidade precisa ser maior que zero.")
                     else:
                         conn = conectar()
-                        novo_saldo = estoque.registrar_movimento(conn, opcoes[escolha], tipo, quantidade, motivo)
+                        novo_saldo = estoque.registrar_movimento(conn, escolha["id"], tipo, quantidade, motivo)
                         conn.close()
                         st.success(f"Registrado. Novo saldo: {novo_saldo:,.0f} g")
                         st.rerun()
@@ -268,8 +285,10 @@ with aba_estoque:
         with st.container(key="card_excluir"):
             _titulo_secao("delete", "Excluir filamento")
             if filamentos:
-                opcoes_del = {f"{f['material']} {f['cor']}": f["id"] for f in filamentos}
-                escolha_del = st.selectbox("Filamento", list(opcoes_del.keys()), key="select_excluir")
+                escolha_del = st.selectbox(
+                    "Filamento", filamentos, key="select_excluir",
+                    format_func=lambda f: f"{f['material']} {f['cor']}",
+                )
                 confirmar = st.checkbox("Confirmo a exclusão (apaga o histórico desse filamento)")
                 # a checagem de `confirmar` aqui dentro é proposital, não redundante com
                 # `disabled=not confirmar` acima: `disabled` só impede o clique na
@@ -280,19 +299,21 @@ with aba_estoque:
                     "Excluir", disabled=not confirmar, width="stretch", icon=":material/delete:"
                 ) and confirmar:
                     conn = conectar()
-                    estoque.excluir_filamento(conn, opcoes_del[escolha_del])
+                    estoque.excluir_filamento(conn, escolha_del["id"])
                     conn.close()
-                    st.success(f"{escolha_del} excluído.")
+                    st.success(f"{escolha_del['material']} {escolha_del['cor']} excluído.")
                     st.rerun()
             else:
                 st.caption("Nada para excluir.")
 
     if filamentos:
         with st.expander("Histórico de movimentações", icon=":material/history:"):
-            opcoes_hist = {f"{f['material']} {f['cor']}": f["id"] for f in filamentos}
-            escolha_hist = st.selectbox("Filamento", list(opcoes_hist.keys()), key="select_historico")
+            escolha_hist = st.selectbox(
+                "Filamento", filamentos, key="select_historico",
+                format_func=lambda f: f"{f['material']} {f['cor']}",
+            )
             conn = conectar()
-            historico = estoque.historico_de(conn, opcoes_hist[escolha_hist])
+            historico = estoque.historico_de(conn, escolha_hist["id"])
             conn.close()
             if historico:
                 df_hist = pd.DataFrame([
@@ -333,6 +354,24 @@ with aba_cotacao:
         st.warning("Cadastre filamentos na aba Estoque primeiro.", icon=":material/inventory_2:")
         st.stop()
 
+    # Estado de seleção guardado por filamento_id em session_state — NUNCA
+    # confiar só no que st.data_editor devolve posicionalmente. Bug real:
+    # o data_editor rastreia edições como "posição da linha -> coluna ->
+    # valor" (streamlit/elements/widgets/data_editor.py, docstring de
+    # `edited_rows`), não por identidade da linha. Como a tabela abaixo é
+    # reconstruída a cada rerun a partir da lista FILTRADA pela busca, o
+    # número/ordem das linhas muda conforme o texto digitado — e o
+    # Streamlit reaplicava a edição salva na "posição 2", por exemplo, em
+    # cima de qualquer filamento que passasse a ocupar a posição 2 depois
+    # do filtro mudar. Resultado: marcar/preencher quantidade de um
+    # filamento, mexer na busca, e a seleção "pulava" pra outro filamento
+    # sem aviso — o bug relatado. Guardando por id e sempre reconstruindo a
+    # tabela a partir desse estado (não de zeros), a exibição fica correta
+    # não importa o que o filtro mostrar a cada rerun, e selecionar itens
+    # em buscas diferentes soma no mesmo pedido em vez de se perder.
+    if "cotacao_selecao" not in st.session_state:
+        st.session_state.cotacao_selecao = {}  # filamento_id -> quantidade_g
+
     busca_cot = st.text_input(
         "Buscar", placeholder="Filtrar por material ou cor…", label_visibility="collapsed",
         key="busca_cotacao", icon=":material/search:",
@@ -347,17 +386,31 @@ with aba_cotacao:
 
     df_sel = pd.DataFrame([
         {
-            "Selecionar": False,
+            "id": f["id"],
+            "Selecionar": f["id"] in st.session_state.cotacao_selecao,
             "Material": f["material"],
             "Cor": f["cor"],
             "Saldo atual (g)": f["saldo_g"],
-            "Quantidade necessária (g)": 0.0,
+            "Quantidade necessária (g)": st.session_state.cotacao_selecao.get(f["id"], 0.0),
         }
         for f in filamentos_filtrados_cot
     ])
 
+    # a `key` do editor muda junto com o CONJUNTO de ids visíveis (não só
+    # com o texto da busca — adicionar/excluir filamento noutra aba também
+    # muda o conjunto). Isso é a segunda metade da correção do bug acima:
+    # sem isso, o Streamlit reaproveita o estado interno do editor antigo
+    # (guardado por posição) e reaplica a edição da "posição 2" em cima do
+    # que quer que esteja na posição 2 da tabela NOVA — reconstruir
+    # `df_sel` a partir do session_state (acima) não adianta se o próprio
+    # data_editor reintroduz a mesma corrupção por baixo. Com a chave
+    # trocando, cada conjunto de linhas diferente é um widget novo, sem
+    # edição antiga nenhuma pra reaplicar errado — e como `df_sel` já vem
+    # montada a partir do session_state, nada se perde visualmente.
+    chave_editor = "tabela_cotacao_" + str(hash(tuple(f["id"] for f in filamentos_filtrados_cot)))
     editado = st.data_editor(
         df_sel,
+        column_order=["Selecionar", "Material", "Cor", "Saldo atual (g)", "Quantidade necessária (g)"],
         column_config={
             "Selecionar": st.column_config.CheckboxColumn(),
             "Material": st.column_config.TextColumn(disabled=True),
@@ -367,25 +420,37 @@ with aba_cotacao:
         },
         hide_index=True,
         width="stretch",
-        key="tabela_cotacao",
+        key=chave_editor,
     )
+
+    # persiste de volta por id imediatamente — é o passo que fecha o bug:
+    # cada rerun consome o que está visível AGORA (correto nesta mesma
+    # passada) e grava por id, então uma busca diferente no próximo rerun
+    # não reaplica a edição na posição errada.
+    for _, row in editado.iterrows():
+        fid = row["id"]
+        if row["Selecionar"] and row["Quantidade necessária (g)"] > 0:
+            st.session_state.cotacao_selecao[fid] = row["Quantidade necessária (g)"]
+        else:
+            st.session_state.cotacao_selecao.pop(fid, None)
 
     objeto = st.text_input("Objeto do pedido", value="Reposição de estoque")
 
-    selecionados = editado[(editado["Selecionar"]) & (editado["Quantidade necessária (g)"] > 0)]
+    # fonte da verdade é o session_state (cobre seleções feitas em qualquer
+    # busca, não só o que está visível agora) — `por_id.get` ignora
+    # silenciosamente um id que tenha sido excluído do estoque nesse meio
+    # tempo, em vez de quebrar a geração do relatório.
+    por_id = {f["id"]: f for f in filamentos_cot}
+    itens_pedido = [
+        {"material": por_id[fid]["material"], "cor": por_id[fid]["cor"], "quantidade_g": qtd}
+        for fid, qtd in st.session_state.cotacao_selecao.items()
+        if fid in por_id
+    ]
 
     if st.button("Gerar pedido de cotação (Excel)", type="primary", icon=":material/request_quote:"):
-        if selecionados.empty:
+        if not itens_pedido:
             st.error("Selecione ao menos um filamento com quantidade maior que zero.")
         else:
-            itens_pedido = [
-                {
-                    "material": row["Material"],
-                    "cor": row["Cor"],
-                    "quantidade_g": row["Quantidade necessária (g)"],
-                }
-                for _, row in selecionados.iterrows()
-            ]
             nome_arquivo = f"pedido_de_cotacao_{datetime.date.today().isoformat()}.xlsx"
             caminho = gerar_relatorio(itens_pedido, objeto=objeto, caminho_saida=nome_arquivo)
             with open(caminho, "rb") as f:
