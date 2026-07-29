@@ -2,6 +2,39 @@
 -- SQLite é a fonte de verdade dos dados. O Excel é gerado sob demanda a
 -- partir daqui (export_excel.py) — nunca o contrário.
 
+-- Controle de estoque próprio (o que a Cilla Tech Park tem guardado) —
+-- fluxo principal a partir de 29/07/2026. `filamentos` é o catálogo de
+-- tipos que você decide rastrear (não vem de raspagem de loja nenhuma);
+-- `movimentos_estoque` é o histórico de entrada/saída em gramas. O saldo
+-- atual NUNCA é uma coluna própria — é sempre a soma do histórico (mesmo
+-- princípio de "nunca sobrescreve" já usado em `cotacoes` abaixo), pra dar
+-- pra auditar quanto tinha em qualquer data, não só agora.
+CREATE TABLE IF NOT EXISTS filamentos (
+    id              INTEGER PRIMARY KEY,
+    material        TEXT NOT NULL,      -- "PLA", "PETG", "ABS", "TPU"...
+    cor             TEXT NOT NULL,
+    criado_em       TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS movimentos_estoque (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    filamento_id    INTEGER NOT NULL REFERENCES filamentos(id),
+    tipo            TEXT NOT NULL,      -- 'entrada' | 'saida'
+    quantidade_g    REAL NOT NULL,
+    motivo          TEXT,
+    criado_em       TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_movimentos_filamento
+    ON movimentos_estoque(filamento_id, criado_em);
+
+-- --- a partir daqui: fluxo antigo de cotação ao vivo (raspagem das 3 lojas
+-- e comparação automática de preço). Substituído em 29/07/2026 pelo fluxo
+-- de estoque + pedido de cotação manual (ver `estoque.py` e
+-- `relatorio_cotacao.py`) — as tabelas ficam dormentes (não removidas: têm
+-- histórico real de preço coletado nas 3 lojas, útil como referência) mas
+-- nada na interface principal escreve nelas mais. Ainda dá pra rodar
+-- `python collector.py` direto por linha de comando se quiser reativar.
 CREATE TABLE IF NOT EXISTS fornecedores (
     id                  INTEGER PRIMARY KEY,
     nome                TEXT NOT NULL UNIQUE,      -- "3DFILA", "3DLAB", "F3D"

@@ -1,87 +1,83 @@
-# Cotação de filamentos — agente + interface + exportação
+# Estoque e Cotação de Filamentos — Cilla Tech Park
 
-## O que já está pronto e testado (28/07/2026 — validado contra as 3 lojas de verdade)
-- **Banco (`schema.sql` / `db.py`)**: SQLite como fonte de verdade. Testado.
-- **Catálogo (`seed.py`)**: os 16 itens do arquivo original, agora com URL
-  de produto cadastrada para os **3 fornecedores** (3DFILA, 3DLAB, F3D) —
-  48 URLs no total, todas conferidas com HTTP 200 antes de cadastrar. Onde
-  a loja não vende a cor exata do catálogo original, a URL mais próxima
-  disponível foi marcada como "aprox." direto no comentário do arquivo
-  (ex.: 3DLAB só tem "PETG UV translúcido", não PETG opaco, nas cores
-  azul/laranja/verde) — revisar essas antes de confiar 100% no preço.
-- **`scrapers/base.py`**: **bug real encontrado e corrigido** — o
-  `User-Agent` tinha acentos (ç/ã/õ) e isso derrubava toda requisição pro
-  3DLAB com 403 (WAF Cloudflare rejeita header com bytes não-ASCII).
-  Confirmado lado a lado: mesma URL, mesmo texto, só tirando o acento já
-  vira 200. Corrigido para ASCII puro.
-- **Os 3 scrapers (`f3d.py`, `dfila.py`, `lab3d.py`)**: rodados de verdade
-  contra páginas de produto reais das 3 lojas. `dfila.py` conferido byte a
-  byte contra o JSON de variações bruto (variante 1kg = R$89,90, bate
-  exato). `lab3d.py` também confirmado (variante 1kg encontrada, marcada
-  `suspeito` como projetado, por causa do desconto por volume). `f3d.py`
-  detecta corretamente produto sem estoque via `nuvemshop:stock=0`.
-  **3DLAB tem rate-limiting intermitente (Cloudflare)** — rajadas de
-  requisições levam a 403 esporádicos que passam a funcionar de novo
-  segundos depois; o coletor não tem retry automático hoje, então uma
-  falha pontual do 3DLAB no meio de uma coleta é esperada, não é bug.
-- **`collector.py`**: rodado de ponta a ponta contra as 3 lojas reais com
-  as 48 URLs — 0 falhas, 24 leituras `ok`, 24 `suspeito` (todo o 3DLAB por
-  design + metade do F3D por falta de estoque sinalizada nesse momento).
-- **`export_excel.py`**: gera o Mapa de Cotação no layout do modelo atual a
-  partir de dados reais coletados. A coluna "ORÇAMENTO MAIS ECONÔMICO"
-  calcula o MIN de verdade (testado com a 3DLAB ficando mais barata que a
-  3DFILA em alguns itens de fato).
-- **`validacao.py`**: sintaxe conferida; a lógica de faixa foi exercitada
-  indiretamente pelo `collector.py` acima.
-- **`streamlit_app.py` (interface "Cilla Tech Park")**: reformulada e
-  aberta de verdade num navegador (Chromium headless via CDP) — testes
-  visuais confirmaram cada peça abaixo funcionando com dados reais:
-  - **Cotação ao vivo com cache de 15 min**: ao abrir a tela, se a última
-    coleta salva tiver mais de `LIMITE_FRESCOR_MIN` (15 min), ela dispara
-    `collector.coletar_tudo()` sozinha, com barra de progresso e log linha
-    a linha (ver `st.status`). Um botão "🔄 Atualizar agora" força a busca
-    a qualquer momento. Testado: rodou a coleta nas 3 lojas reais dentro da
-    tela e o selo de status virou "🟢 atualizado agora mesmo" ao terminar.
-  - **`collector.coletar_tudo(progress_callback=...)`**: agora aceita um
-    callback de progresso (chamado a cada item/fornecedor processado) —
-    é o que a interface usa para a barra ao vivo, em vez de rodar o
-    coletor como subprocesso.
-  - **Retry em cima do bloqueio intermitente do 3DLAB**: `collector.py`
-    agora tenta de novo (até 2x) quando um scraper leva 403, e qualquer
-    outro erro de rede vira `falha` numa linha só, em vez de derrubar a
-    coleta inteira — corrige um bug real: antes, uma exceção de rede não
-    tratada (`requests.exceptions.HTTPError`/`RequestException`) por fora
-    de `ErroColeta` quebrava `coletar_tudo()` no meio do processamento.
-  - **Único campo editável é a quantidade**: tabela via `st.data_editor`
-    com todas as colunas travadas (`disabled=True`) exceto "Qtd". Editar
-    grava direto em `itens.quantidade` (`db.atualizar_quantidade`) e
-    recalcula o total na hora — **sem** disparar nova coleta (testado:
-    editar quantidade não muda o selo "atualizado há X min", só o valor
-    do total). `export_excel.py` já lê a quantidade do banco, então a
-    planilha exportada reflete a edição automaticamente.
-  - **Identidade visual "Cilla Tech Park"**: cabeçalho com a marca, selo de
-    status colorido (🟢/🔵/🔴) e KPIs no topo (total mais econômico,
-    leituras ok/suspeitas/sem preço), usando a paleta de status validada
-    pela skill de dataviz (verde `#0ca30c` / amarelo `#fab219` / vermelho
-    `#d03b3b`) em vez de cores escolhidas a dedo.
+## O que já está pronto e testado (29/07/2026)
+
+**Mudança de rumo nesta data:** o fluxo deixou de ser "raspar as 3 lojas e
+comparar preço automaticamente" e passou a ser **controle de estoque
+próprio + pedido de cotação manual**. O motivo: o dono do sistema não quer
+mais que o software decida sozinho quem é mais barato — quer saber quanto
+tem guardado e, quando precisar comprar, gerar uma lista pra mandar pras
+3 empresas cotarem de verdade.
+
+- **`schema.sql`**: duas tabelas novas, `filamentos` (catálogo dos tipos
+  que você decide rastrear — material + cor, não vem de raspagem de loja)
+  e `movimentos_estoque` (histórico de entrada/saída em gramas). O saldo
+  atual nunca é uma coluna solta — é sempre a soma do histórico, mesmo
+  princípio de "nunca sobrescreve" que o sistema já usava para preço.
+- **`estoque.py`**: lógica de negócio — adicionar/excluir filamento,
+  registrar entrada/saída, calcular saldo e ver histórico. Testado direto
+  (sem interface) simulando um ciclo completo: adicionar 1000g → saída
+  300g → entrada 200g → saldo final 900g confere, exclusão remove
+  filamento e histórico junto.
+- **`relatorio_cotacao.py`**: gera o pedido de cotação em Excel (lista
+  simples: item, material, cor, quantidade necessária — **sem** coluna de
+  preço, porque isso é a empresa quem preenche na resposta). Levanta erro
+  se a lista vier vazia, não gera planilha em branco.
+- **`streamlit_app.py`**: interface com duas abas, testada de ponta a
+  ponta via `streamlit.testing.v1.AppTest` (roda o app de verdade, sem
+  navegador) e checagem direta no banco antes/depois de cada ação:
+  - **📦 Estoque**: tabela com saldo atual de cada filamento (g e kg),
+    formulário de adicionar (material + cor + quantidade inicial),
+    formulário de registrar entrada/saída (com motivo), exclusão com
+    checkbox de confirmação, e histórico de movimentações por filamento.
+  - **📋 Cotação**: tabela editável (`st.data_editor`) pra marcar quais
+    filamentos precisa comprar e quanto; gera o Excel do pedido só com os
+    itens marcados **e** com quantidade > 0 (testado o filtro isolado —
+    item marcado sem quantidade, ou com quantidade mas não marcado, fica
+    de fora). Botão de gerar avisa em vez de travar se nada foi
+    selecionado.
+  - **Bug real encontrado e corrigido durante o teste**: o botão
+    "Excluir" só ficava bloqueado pelo atributo visual `disabled` do
+    Streamlit (que impede o clique no navegador, mas não é uma barreira
+    no código). Adicionei checagem explícita de `confirmar` no `if` do
+    botão — agora a exclusão exige a confirmação nos dois níveis, não só
+    na interface.
+  - **Limitação conhecida do teste**: `st.data_editor` não é
+    simulável por `AppTest` nesta versão do Streamlit (sem suporte a
+    editar célula programaticamente) — a lógica de filtro downstream
+    (seleção + quantidade > 0 → gera relatório) foi validada isolada com
+    um DataFrame sintético reproduzindo exatamente a saída esperada do
+    editor, mas a interação real de marcar checkbox/digitar quantidade
+    na grade não passou por teste automatizado. Vale um clique manual
+    de conferência.
+
+## O que ficou dormente (fluxo antigo de cotação ao vivo)
+
+`fornecedores`, `itens`, `urls_produto`, `cotacoes` (schema), `db.py`
+(funções ligadas a essas tabelas), `collector.py`, `validacao.py`,
+`export_excel.py` e os scrapers em `scrapers/` (`f3d.py`, `dfila.py`,
+`lab3d.py`) continuam no repositório e funcionam via linha de comando —
+não foram apagados porque têm histórico real de preço coletado nas 3
+lojas em 28/07/2026, útil como referência. Só não são mais chamados pela
+interface principal. Pra reativar esse fluxo: `python collector.py` +
+`python export_excel.py` continuam rodando como antes.
 
 ## O que ainda falta revisar
-1. **Confirmar as URLs "aprox."** listadas nos comentários de `seed.py`
-   (PLA Rosa no 3DLAB, PETG Azul/Laranja/Verde no 3DLAB, PETG Laranja no
-   F3D) — são a cor mais próxima disponível, não a cor exata do catálogo
-   original.
-2. **3D Lab**: desconto por volume soma todas as cores da mesma categoria
-   no carrinho — o preço capturado é sempre o unitário sem desconto,
-   marcado `suspeito` de propósito. Validar contra um carrinho real antes
-   de fechar compra.
-3. **Ajustar `faixa_min`/`faixa_max`** em `seed.py` — hoje são só um ponto
-   de partida do arquivo antigo; os preços reais coletados (R$89-150 em
-   PLA, R$89-146 em PETG) já dão uma calibração melhor.
 
-## Como rodar (na sua máquina, com rede de verdade)
+1. **Testar a aba Cotação com clique real no navegador** — a interação
+   com `st.data_editor` (marcar checkbox, digitar quantidade) não foi
+   coberta por teste automatizado (ver limitação acima).
+2. Não há histórico persistido de *pedidos de cotação já enviados* — cada
+   geração de Excel é um evento avulso, não fica salvo no banco quem foi
+   pedido quando. Se isso importar (ex.: "já pedi cotação desse item mês
+   passado?"), é a próxima peça a desenhar.
+3. `material` no formulário de adicionar filamento é uma lista fixa (PLA,
+   PETG, ABS, TPU, ASA, HIPS, Nylon, PC, Outro) com campo livre pra
+   "Outro" — se aparecer material recorrente fora dessa lista, vale
+   adicionar na lista fixa pra evitar grafia inconsistente.
+
+## Como rodar (na sua máquina)
 ```
 pip install -r requirements.txt
-python seed.py            # popula o catálogo (uma vez)
-python collector.py       # roda a coleta de preços
-streamlit run streamlit_app.py   # abre a interface de comparação/exportação
+streamlit run streamlit_app.py   # abre a interface de estoque e cotação
 ```
