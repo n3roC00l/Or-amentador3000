@@ -2,14 +2,48 @@
 # Fixo (não segue tema claro/escuro do sistema do usuário) de propósito: um
 # sistema corporativo com marca própria não deve mudar de cara dependendo do
 # SO de quem abre — a identidade visual tem que ser sempre a mesma.
+#
+# Paleta/tipografia/ícones seguem o plano em DESIGN.md — mudar um valor
+# aqui sem atualizar aquele arquivo desalinha o guia da implementação real.
 [theme]
 base = "light"
+
 primaryColor = "#2a78d6"
-backgroundColor = "#ffffff"
-secondaryBackgroundColor = "#f4f6fa"
+backgroundColor = "#f6f8fb"
+secondaryBackgroundColor = "#eef1f6"
 textColor = "#1a1f2b"
-font = "sans serif"
+borderColor = "#e2e6ee"
+
+# cores semânticas dos alertas nativos (st.error/success/warning/info) —
+# setadas direto como texto/fundo (em vez de só a cor "base" e deixar o
+# Streamlit derivar) pra bater exatamente com a paleta do DESIGN.md.
+redTextColor = "#b3261e"
+redBackgroundColor = "#fdecea"
+orangeTextColor = "#a15c00"
+orangeBackgroundColor = "#fdf3e3"
+yellowTextColor = "#a15c00"
+yellowBackgroundColor = "#fdf3e3"
+greenTextColor = "#1a8754"
+greenBackgroundColor = "#eaf6ef"
+
+# Inter via Google Fonts, com fallback caso a rede falhe — família comum em
+# dashboard corporativo/B2B, com números tabulares (dígito alinha com
+# dígito em coluna).
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap, system-ui, sans-serif"
+
+# só h3 (usado nos títulos de seção via st.subheader) muda de tamanho — h1
+# e h2 ficam nos valores padrão do Streamlit (não usamos h1/h2 na tela).
+headingFontSizes = ["2.75rem", "2.25rem", "1.0625rem"]
+
+# KPI menor que o padrão (2.25rem) — painel operacional denso, não número
+# de vitrine.
+metricValueFontSize = "1.75rem"
+
 baseRadius = "0.5rem"
+showWidgetBorder = true
+
+dataframeBorderColor = "#e2e6ee"
+dataframeHeaderBackgroundColor = "#eef1f6"
 
 [client]
 # some o menu "⋮" e o botão "Deploy" — são chrome de ambiente de

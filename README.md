@@ -1,5 +1,27 @@
 # Estoque e Cotação de Filamentos — Cilla Tech Park
 
+## Reformulação visual completa (29/07/2026, fim de tarde)
+
+Pedido explícito: zero emoji, hierarquia tipográfica real, cards com
+anatomia clara, tabelas com contraste, alertas integrados à paleta — cara
+de sistema corporativo de fábrica/parque tecnológico, não protótipo
+genérico de Streamlit. Plano completo (paleta, tipografia, ícones,
+layout) e checklist de implementação em **[`DESIGN.md`](DESIGN.md)** —
+aprovado antes de implementar, atualizado conforme cada item foi
+concluído.
+
+Resumo do que mudou: tema claro com paleta neutra fria (não bege, não
+preto) via `.streamlit/config.toml`, tipografia Inter com escala de papéis
+definida, ícones Material Symbols Rounded (nativos via `icon=` em botão/
+expander/alerta, e via HTML+CSS nos títulos de seção — `st.tabs` não
+aceita HTML nem `icon=`, então as abas ficaram só com texto, decisão
+documentada no `DESIGN.md`), cards com superfície branca elevada sobre o
+fundo cinza da página, botão "Excluir" tratado como ação destrutiva
+(vermelho, não azul de marca), e as cores de `st.error`/`st.success`/
+`st.warning` recalibradas pra paleta do sistema em vez do vermelho/amarelo
+padrão do Streamlit. Regressão (`AppTest`) revalidada e conferência visual
+feita via Chromium headless real.
+
 ## Revisão de qualidade e identidade visual (29/07/2026, à tarde)
 
 Pedido do dono do sistema: revisão como engenheiro de software pensando em

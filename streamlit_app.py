@@ -5,8 +5,12 @@ cotação para fornecedores.
 Rodar localmente:
     streamlit run streamlit_app.py
 
-Tema visual e chrome de UI (cor da marca, ocultar toolbar de dev) ficam em
-`.streamlit/config.toml` — não aqui, é onde o Streamlit espera.
+Tema visual (paleta, tipografia, tokens de tabela) fica em
+`.streamlit/config.toml`. O CSS neste arquivo cobre só o que o tema do
+Streamlit não alcança: anatomia de card, ícones (Material Symbols Rounded,
+zero emoji) e o botão "Excluir" como ação destrutiva. Guia completo de
+design (paleta/tipografia/ícones) em `DESIGN.md` — qualquer ajuste visual
+aqui deveria primeiro atualizar aquele arquivo.
 
 Fonte de verdade é o SQLite (cotacoes.db). Duas abas:
 
@@ -36,6 +40,17 @@ from relatorio_cotacao import gerar as gerar_relatorio
 
 MARCA = "Cilla Tech Park"
 COR_MARCA = "#2a78d6"
+COR_BORDA = "#e2e6ee"
+COR_ERRO_TEXTO = "#b3261e"
+COR_ERRO_FUNDO = "#fdecea"
+
+# só os ícones realmente usados na tela — mantém o download da fonte pequeno
+# em vez de puxar o conjunto inteiro do Material Symbols.
+_ICONES_USADOS = "inventory_2,description,add,swap_horiz,delete,history,request_quote,download,search"
+_FONTE_ICONES = (
+    "https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:"
+    f"opsz,wght,FILL,GRAD@20,400,0,0&icon_names={_ICONES_USADOS}"
+)
 
 st.set_page_config(page_title="Filamentos — Cilla Tech Park", layout="wide", page_icon="🧵")
 inicializar()
@@ -43,30 +58,77 @@ inicializar()
 st.markdown(
     f"""
     <style>
+    @import url('{_FONTE_ICONES}');
+
+    .md-icon {{
+        font-family: 'Material Symbols Rounded';
+        font-weight: normal;
+        font-style: normal;
+        font-size: 20px;
+        line-height: 1;
+        vertical-align: -4px;
+        display: inline-block;
+    }}
+
     .ctp-header {{
         display: flex;
         align-items: baseline;
         gap: 0.7rem;
-        border-bottom: 3px solid {COR_MARCA};
+        border-bottom: 2px solid {COR_MARCA};
         padding-bottom: 0.7rem;
         margin-bottom: 1.4rem;
     }}
     .ctp-marca {{
         color: {COR_MARCA};
         font-weight: 700;
-        font-size: 1.5rem;
+        font-size: 1.375rem;
         letter-spacing: 0.01em;
     }}
     .ctp-subtitulo {{
-        opacity: 0.65;
-        font-size: 1rem;
+        color: #5b6472;
+        font-size: 0.9375rem;
     }}
-    /* aproxima o rótulo dos widgets do controle, títulos de seção com peso
-       maior — reduz o aspecto "formulário cru" padrão do Streamlit */
-    div[data-testid="stForm"] {{
-        border: 1px solid rgba(49, 51, 63, 0.15);
+
+    .ctp-secao {{
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 1.0625rem;
+        font-weight: 600;
+        color: #1a1f2b;
+        margin: 0 0 0.7rem 0;
+    }}
+    .ctp-secao .md-icon {{
+        color: {COR_MARCA};
+    }}
+
+    /* cards: formulários e o container da coluna Excluir recebem a mesma
+       superfície branca elevada sobre o fundo cinza da página — sem isso
+       cada seção era só uma caixa com borda fina genérica do Streamlit. */
+    div[data-testid="stForm"], [class*="st-key-card_"] {{
+        background: #ffffff;
+        border: 1px solid {COR_BORDA};
         border-radius: 0.6rem;
-        padding: 1.2rem 1.2rem 0.6rem 1.2rem;
+        padding: 1.25rem 1.25rem 1rem 1.25rem;
+        box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+    }}
+
+    /* botão Excluir tratado como ação destrutiva (contorno/texto na cor de
+       erro), não mais um botão azul de marca igual aos de ação principal —
+       evita que pareça "só mais um botão" e reduz risco de clique
+       acidental. */
+    .st-key-card_excluir div[data-testid="stButton"] button {{
+        border-color: {COR_ERRO_TEXTO} !important;
+        color: {COR_ERRO_TEXTO} !important;
+        background: #ffffff !important;
+    }}
+    .st-key-card_excluir div[data-testid="stButton"] button:hover:not(:disabled) {{
+        background: {COR_ERRO_FUNDO} !important;
+    }}
+    .st-key-card_excluir div[data-testid="stButton"] button:disabled {{
+        border-color: {COR_BORDA} !important;
+        color: #98a1b0 !important;
+        background: #ffffff !important;
     }}
     </style>
     <div class="ctp-header">
@@ -77,7 +139,17 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-aba_estoque, aba_cotacao = st.tabs(["📦 Estoque", "📋 Cotação"])
+
+def _titulo_secao(icone: str, texto: str):
+    """Título de seção/card padronizado: ícone Material Symbols + texto,
+    mesmo papel tipográfico em toda a tela (ver DESIGN.md)."""
+    st.markdown(
+        f'<div class="ctp-secao"><span class="md-icon">{icone}</span>{texto}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+aba_estoque, aba_cotacao = st.tabs(["Estoque", "Cotação"])
 
 
 def _tabela_filamentos(lista, incluir_kg=True):
@@ -111,10 +183,11 @@ with aba_estoque:
     kpi1.metric("Tipos de filamento cadastrados", f"{len(filamentos):,}")
     kpi2.metric("Total em estoque", f"{sum(f['saldo_g'] for f in filamentos):,.0f} g")
 
-    st.subheader("Filamentos em estoque")
+    _titulo_secao("inventory_2", "Filamentos em estoque")
     if filamentos:
         busca = st.text_input(
-            "Buscar", placeholder="Filtrar por material ou cor…", label_visibility="collapsed"
+            "Buscar", placeholder="Filtrar por material ou cor…",
+            label_visibility="collapsed", icon=":material/search:",
         )
         filtrados = filamentos
         if busca.strip():
@@ -139,19 +212,19 @@ with aba_estoque:
         else:
             st.caption(f"Nenhum filamento bate com \"{busca}\".")
     else:
-        st.info("Nenhum filamento cadastrado ainda — adicione um abaixo.")
+        st.info("Nenhum filamento cadastrado ainda — adicione um abaixo.", icon=":material/inventory_2:")
 
     st.markdown("###")
     col_add, col_mov, col_del = st.columns(3)
 
     with col_add:
-        st.markdown("**➕ Adicionar filamento**")
         with st.form("form_add_filamento", clear_on_submit=True):
+            _titulo_secao("add", "Adicionar filamento")
             material = st.selectbox("Material", estoque.MATERIAIS_COMUNS)
             material_livre = st.text_input("Material (se escolheu \"Outro\")", disabled=material != "Outro")
             cor = st.text_input("Cor")
             qtd_inicial = st.number_input("Quantidade inicial (g)", min_value=0.0, step=100.0)
-            if st.form_submit_button("Adicionar", width="stretch"):
+            if st.form_submit_button("Adicionar", width="stretch", icon=":material/add:"):
                 material_final = material_livre.strip() if material == "Outro" else material
                 if not material_final or not cor.strip():
                     st.error("Preencha material e cor.")
@@ -169,15 +242,15 @@ with aba_estoque:
                     st.rerun()
 
     with col_mov:
-        st.markdown("**🔁 Registrar entrada/saída**")
         if filamentos:
             with st.form("form_movimento"):
+                _titulo_secao("swap_horiz", "Registrar entrada/saída")
                 opcoes = {f"{f['material']} {f['cor']} (saldo {f['saldo_g']:.0f} g)": f["id"] for f in filamentos}
                 escolha = st.selectbox("Filamento", list(opcoes.keys()))
                 tipo = st.radio("Tipo", ["entrada", "saida"], horizontal=True, format_func=lambda t: "Entrada" if t == "entrada" else "Saída")
                 quantidade = st.number_input("Quantidade (g)", min_value=0.0, step=50.0)
                 motivo = st.text_input("Motivo", placeholder="ex.: compra 3DFILA NF 1234, consumo peça X")
-                if st.form_submit_button("Registrar", width="stretch"):
+                if st.form_submit_button("Registrar", width="stretch", icon=":material/swap_horiz:"):
                     if quantidade <= 0:
                         st.error("Quantidade precisa ser maior que zero.")
                     else:
@@ -187,12 +260,14 @@ with aba_estoque:
                         st.success(f"Registrado. Novo saldo: {novo_saldo:,.0f} g")
                         st.rerun()
         else:
-            st.caption("Cadastre um filamento primeiro.")
+            with st.container(key="card_registrar_vazio"):
+                _titulo_secao("swap_horiz", "Registrar entrada/saída")
+                st.caption("Cadastre um filamento primeiro.")
 
     with col_del:
-        st.markdown("**🗑️ Excluir filamento**")
-        if filamentos:
-            with st.container(border=True):
+        with st.container(key="card_excluir"):
+            _titulo_secao("delete", "Excluir filamento")
+            if filamentos:
                 opcoes_del = {f"{f['material']} {f['cor']}": f["id"] for f in filamentos}
                 escolha_del = st.selectbox("Filamento", list(opcoes_del.keys()), key="select_excluir")
                 confirmar = st.checkbox("Confirmo a exclusão (apaga o histórico desse filamento)")
@@ -201,17 +276,19 @@ with aba_estoque:
                 # interface real (JS do navegador); sem essa segunda checagem, uma
                 # chamada direta ao callback do botão apagaria o filamento mesmo sem
                 # confirmação.
-                if st.button("Excluir", type="primary", disabled=not confirmar, width="stretch") and confirmar:
+                if st.button(
+                    "Excluir", disabled=not confirmar, width="stretch", icon=":material/delete:"
+                ) and confirmar:
                     conn = conectar()
                     estoque.excluir_filamento(conn, opcoes_del[escolha_del])
                     conn.close()
                     st.success(f"{escolha_del} excluído.")
                     st.rerun()
-        else:
-            st.caption("Nada para excluir.")
+            else:
+                st.caption("Nada para excluir.")
 
     if filamentos:
-        with st.expander("🕘 Histórico de movimentações"):
+        with st.expander("Histórico de movimentações", icon=":material/history:"):
             opcoes_hist = {f"{f['material']} {f['cor']}": f["id"] for f in filamentos}
             escolha_hist = st.selectbox("Filamento", list(opcoes_hist.keys()), key="select_historico")
             conn = conectar()
@@ -241,6 +318,7 @@ with aba_estoque:
 
 # ============================================================ COTAÇÃO ====
 with aba_cotacao:
+    _titulo_secao("description", "Selecionar filamentos para cotação")
     st.caption(
         "Escolha quais filamentos você precisa comprar e quanto — a tela gera "
         "uma planilha simples (material, cor, quantidade) pra mandar pras "
@@ -252,11 +330,12 @@ with aba_cotacao:
     conn.close()
 
     if not filamentos_cot:
-        st.warning("Cadastre filamentos na aba Estoque primeiro.")
+        st.warning("Cadastre filamentos na aba Estoque primeiro.", icon=":material/inventory_2:")
         st.stop()
 
     busca_cot = st.text_input(
-        "Buscar", placeholder="Filtrar por material ou cor…", label_visibility="collapsed", key="busca_cotacao"
+        "Buscar", placeholder="Filtrar por material ou cor…", label_visibility="collapsed",
+        key="busca_cotacao", icon=":material/search:",
     )
     filamentos_filtrados_cot = filamentos_cot
     if busca_cot.strip():
@@ -295,7 +374,7 @@ with aba_cotacao:
 
     selecionados = editado[(editado["Selecionar"]) & (editado["Quantidade necessária (g)"] > 0)]
 
-    if st.button("📤 Gerar pedido de cotação (Excel)", type="primary"):
+    if st.button("Gerar pedido de cotação (Excel)", type="primary", icon=":material/request_quote:"):
         if selecionados.empty:
             st.error("Selecione ao menos um filamento com quantidade maior que zero.")
         else:
@@ -311,9 +390,10 @@ with aba_cotacao:
             caminho = gerar_relatorio(itens_pedido, objeto=objeto, caminho_saida=nome_arquivo)
             with open(caminho, "rb") as f:
                 st.download_button(
-                    "⬇️ Baixar pedido de cotação",
+                    "Baixar pedido de cotação",
                     data=f.read(),
                     file_name=nome_arquivo,
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    icon=":material/download:",
                 )
             st.success(f"Pedido gerado com {len(itens_pedido)} item(ns).")

@@ -1,7 +1,15 @@
 # Guia de reformulação visual — Estoque e Cotação (Cilla Tech Park)
 
-**Status:** plano aprovado em 29/07/2026, implementação em andamento (ver
-checklist no fim deste arquivo).
+**Status:** implementado em 29/07/2026 (ver checklist no fim deste
+arquivo). Regressão (`AppTest`) revalidada, conferência visual feita via
+Chromium headless real (não só leitura de código).
+
+**Um ajuste em relação ao plano original:** `st.tabs` não aceita HTML nem
+o parâmetro `icon=` — só markdown limitado (negrito/itálico/links/imagem).
+Simular o ícone via imagem exigiria recriar os glifos do Material Symbols
+como SVG à mão, com risco real de sair visualmente errado. Optei por
+deixar as abas só com texto ("Estoque", "Cotação") — ainda cumpre "zero
+emoji", ícone fica em todo o resto (cards, botões, alertas, expander).
 
 **Objetivo:** a lógica e os dados do sistema estão certos — o problema é só
 visual. Hoje a interface parece um protótipo genérico do Streamlit; o
@@ -101,12 +109,12 @@ mesma fonte — um único sistema de ícone em toda a tela.
 
 ## Checklist de implementação
 
-- [ ] Paleta e tipografia via `.streamlit/config.toml` (theme tokens)
-- [ ] Ícones nativos (`:material/nome:`) em botões, expander, alertas
-- [ ] Ícones via HTML+CSS em abas e títulos de seção
-- [ ] Cards com cabeçalho separado (ícone + título + divisória)
-- [ ] Tabelas com cabeçalho tintado/contraste
-- [ ] Botão "Excluir" com tratamento de ação destrutiva
-- [ ] Header do app com nova escala tipográfica
-- [ ] Suíte de regressão (`AppTest`) revalidada após as mudanças
-- [ ] Conferência visual real (screenshots) antes/depois
+- [x] Paleta e tipografia via `.streamlit/config.toml` (theme tokens)
+- [x] Ícones nativos (`:material/nome:`) em botões, expander, alertas
+- [x] Ícones via HTML+CSS em títulos de seção (abas ficaram só texto — ver nota de status acima)
+- [x] Cards com cabeçalho separado (ícone + título, superfície branca com sombra sutil)
+- [x] Tabelas com cabeçalho tintado/contraste (`dataframeHeaderBackgroundColor`)
+- [x] Botão "Excluir" com tratamento de ação destrutiva (contorno/texto vermelho, não azul de marca)
+- [x] Header do app com nova escala tipográfica
+- [x] Suíte de regressão (`AppTest`) revalidada após as mudanças
+- [x] Conferência visual real (screenshots) antes/depois, incluindo alerta de erro com a paleta muted
