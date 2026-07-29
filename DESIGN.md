@@ -4,6 +4,15 @@
 arquivo). Regressão (`AppTest`) revalidada, conferência visual feita via
 Chromium headless real (não só leitura de código).
 
+**Atualização de paleta (29/07/2026, à noite):** a paleta original abaixo
+foi substituída pela paleta real do **Espaço Maker CTP**
+(`espa-o-maker.vercel.app`) — outro sistema interno da Cilla Tech Park
+(Demandas/Orçamentos/Estoque/Financeiro/Agenda), pra manter identidade
+visual consistente entre as ferramentas internas da empresa. Extraída das
+variáveis CSS reais do site (`:root`), não de leitura visual aproximada.
+Ver tabela "Paleta" já atualizada com os valores novos; os antigos
+(`#2a78d6` etc.) ficam só nesta nota como registro histórico.
+
 **Um ajuste em relação ao plano original:** `st.tabs` não aceita HTML nem
 o parâmetro `icon=` — só markdown limitado (negrito/itálico/links/imagem).
 Simular o ícone via imagem exigiria recriar os glifos do Material Symbols
@@ -24,25 +33,36 @@ componentes exigir ajuste neles, o ajuste é parte do trabalho.
 
 ## Paleta
 
-Fundo neutro frio (cinza-azulado, não bege/quente), cor de marca mantida:
+Fonte: variáveis CSS de `espa-o-maker.vercel.app` (Espaço Maker CTP),
+extraídas via DevTools/computed style em 29/07/2026 — não é uma
+aproximação visual, são os valores reais declarados no `:root` daquele
+site.
 
 | Papel | Cor | Uso |
 |---|---|---|
-| Marca | `#2a78d6` | ações primárias, links, destaque de marca |
-| Fundo da página | `#f6f8fb` | fundo geral |
+| Marca (navy) | `#063a70` | ações primárias, header, destaque de marca — era `#2a78d6` |
+| Marca escura | `#042c56` / `#021e3a` | hover/estados escuros (uso futuro, não crítico agora) |
+| Destaque (lime) | `#a1f01f` | **só** indicadores de status/sucesso — nunca como cor de texto direta (contraste ruim em fundo claro), ver linha "Sucesso" abaixo |
+| Fundo da página | `#e6ebf2` | fundo geral — era `#f6f8fb` |
 | Superfície (card) | `#ffffff` | cards sobre o fundo — cria hierarquia sem sombra pesada |
-| Borda | `#e2e6ee` | bordas de card/input |
-| Borda forte | `#c9d0dc` | divisórias, cabeçalho de tabela |
-| Texto primário | `#1a1f2b` | mantido |
-| Texto secundário | `#5b6472` | labels, legendas, captions |
-| Texto desabilitado | `#98a1b0` | placeholders |
-| Sucesso | `#1a8754` texto / `#eaf6ef` fundo | confirmações |
-| Atenção | `#a15c00` texto / `#fdf3e3` fundo | avisos |
-| Erro | `#b3261e` texto / `#fdecea` fundo | erros — não o vermelho "alarme" padrão do Streamlit |
+| Fundo de input/muted | `#f6f8fb` / `#f4f7fa` | inputs, cabeçalho de tabela |
+| Borda | `#e2e8f0` | bordas de card/input — era `#e2e6ee` |
+| Texto primário | `#0a1628` | era `#1a1f2b` |
+| Texto secundário | `#4b5769` | labels, legendas, captions |
+| Texto desabilitado/muted | `#8898aa` | placeholders |
+| **Sucesso** | `#3f6212` texto / `#d4f89e` fundo | confirmações — fundo é o `--ctp-lime-muted` real do site; texto é um tom escuro derivado do mesmo matiz (o lime puro `#a1f01f` não passa em contraste como texto — decisão do usuário foi "lime só em indicador de status/sucesso", então a família de cor muda pra lime, mas a legibilidade fica garantida com um verde-oliva escuro em vez do lime cru) |
+| Atenção | `#a15c00` texto / `#fdf3e3` fundo | avisos — não fazia parte da paleta extraída, mantido |
+| Erro | `#b3261e` texto / `#fdecea` fundo | erros — não fazia parte da paleta extraída, mantido |
 
 Cores semânticas entram via `theme.redColor`/`greenColor`/`orangeColor` no
 `.streamlit/config.toml` — o Streamlit deriva sozinho os fundos/tons de
 `st.error`/`st.success`/`st.warning`/`st.info`.
+
+Escala de raio disponível no site de referência (não adotada ainda, fica
+registrada pra quando fizer sentido refinar): `sm` 6px, `md` 10px, `lg`
+14px, `xl` 20px, `full` pill. Sombras lá são tingidas de navy em vez de
+preto puro (`0 4px 12px #063a7014`) — mesmo princípio que já seguimos com
+a sombra sutil dos cards, só não com a cor exata deles ainda.
 
 ## Tipografia
 
@@ -118,3 +138,4 @@ mesma fonte — um único sistema de ícone em toda a tela.
 - [x] Header do app com nova escala tipográfica
 - [x] Suíte de regressão (`AppTest`) revalidada após as mudanças
 - [x] Conferência visual real (screenshots) antes/depois, incluindo alerta de erro com a paleta muted
+- [x] Paleta alinhada ao Espaço Maker CTP (navy `#063a70` + lime `#a1f01f` em sucesso/status) — `config.toml`, `streamlit_app.py`, `DESIGN.md` atualizados; regressão revalidada, conferência visual do navy feita via Chromium headless (sucesso/lime não capturado no screenshot por causa do `st.rerun()` logo depois — mesmo mecanismo de tema já confirmado funcionando no alerta de erro)

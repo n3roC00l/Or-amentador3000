@@ -38,9 +38,10 @@ import estoque
 from db import conectar, inicializar
 from relatorio_cotacao import gerar as gerar_relatorio
 
+# paleta alinhada ao Espaço Maker CTP (espa-o-maker.vercel.app) — ver DESIGN.md
 MARCA = "Cilla Tech Park"
-COR_MARCA = "#2a78d6"
-COR_BORDA = "#e2e6ee"
+COR_MARCA = "#063a70"
+COR_BORDA = "#e2e8f0"
 COR_ERRO_TEXTO = "#b3261e"
 COR_ERRO_FUNDO = "#fdecea"
 
@@ -85,7 +86,7 @@ st.markdown(
         letter-spacing: 0.01em;
     }}
     .ctp-subtitulo {{
-        color: #5b6472;
+        color: #4b5769;
         font-size: 0.9375rem;
     }}
 
@@ -95,7 +96,7 @@ st.markdown(
         gap: 0.5rem;
         font-size: 1.0625rem;
         font-weight: 600;
-        color: #1a1f2b;
+        color: #0a1628;
         margin: 0 0 0.7rem 0;
     }}
     .ctp-secao .md-icon {{
@@ -127,7 +128,7 @@ st.markdown(
     }}
     .st-key-card_excluir div[data-testid="stButton"] button:disabled {{
         border-color: {COR_BORDA} !important;
-        color: #98a1b0 !important;
+        color: #8898aa !important;
         background: #ffffff !important;
     }}
     </style>

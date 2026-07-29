@@ -8,11 +8,14 @@
 [theme]
 base = "light"
 
-primaryColor = "#2a78d6"
-backgroundColor = "#f6f8fb"
-secondaryBackgroundColor = "#eef1f6"
-textColor = "#1a1f2b"
-borderColor = "#e2e6ee"
+# Paleta alinhada ao Espaço Maker CTP (espa-o-maker.vercel.app), outro
+# sistema interno da Cilla Tech Park — extraída das variáveis CSS reais do
+# site em 29/07/2026, não aproximada visualmente. Ver DESIGN.md.
+primaryColor = "#063a70"
+backgroundColor = "#e6ebf2"
+secondaryBackgroundColor = "#f6f8fb"
+textColor = "#0a1628"
+borderColor = "#e2e8f0"
 
 # cores semânticas dos alertas nativos (st.error/success/warning/info) —
 # setadas direto como texto/fundo (em vez de só a cor "base" e deixar o
@@ -23,8 +26,12 @@ orangeTextColor = "#a15c00"
 orangeBackgroundColor = "#fdf3e3"
 yellowTextColor = "#a15c00"
 yellowBackgroundColor = "#fdf3e3"
-greenTextColor = "#1a8754"
-greenBackgroundColor = "#eaf6ef"
+# sucesso agora na família "lime" do Espaço Maker CTP (pedido explícito do
+# usuário: lime só em status/sucesso) — fundo é o --ctp-lime-muted real
+# deles (#d4f89e); texto é um verde-oliva escuro do mesmo matiz, não o
+# lime puro (#a1f01f reprova contraste como cor de texto em fundo claro).
+greenTextColor = "#3f6212"
+greenBackgroundColor = "#d4f89e"
 
 # Inter via Google Fonts, com fallback caso a rede falhe — família comum em
 # dashboard corporativo/B2B, com números tabulares (dígito alinha com
@@ -42,8 +49,8 @@ metricValueFontSize = "1.75rem"
 baseRadius = "0.5rem"
 showWidgetBorder = true
 
-dataframeBorderColor = "#e2e6ee"
-dataframeHeaderBackgroundColor = "#eef1f6"
+dataframeBorderColor = "#e2e8f0"
+dataframeHeaderBackgroundColor = "#f6f8fb"
 
 [client]
 # some o menu "⋮" e o botão "Deploy" — são chrome de ambiente de
