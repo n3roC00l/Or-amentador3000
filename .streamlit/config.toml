@@ -1,0 +1,17 @@
+# Tema visual e configuração de UI da Cilla Tech Park.
+# Fixo (não segue tema claro/escuro do sistema do usuário) de propósito: um
+# sistema corporativo com marca própria não deve mudar de cara dependendo do
+# SO de quem abre — a identidade visual tem que ser sempre a mesma.
+[theme]
+base = "light"
+primaryColor = "#2a78d6"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f4f6fa"
+textColor = "#1a1f2b"
+font = "sans serif"
+baseRadius = "0.5rem"
+
+[client]
+# some o menu "⋮" e o botão "Deploy" — são chrome de ambiente de
+# desenvolvimento do Streamlit, não fazem sentido pra quem só usa o sistema.
+toolbarMode = "minimal"

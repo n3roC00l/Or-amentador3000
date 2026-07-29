@@ -4,4 +4,4 @@ __pycache__/
 venv/
 cotacoes.db
 mapa_de_cotacao_*.xlsx
-.streamlit/
+.streamlit/secrets.toml

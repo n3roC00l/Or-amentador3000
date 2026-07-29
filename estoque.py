@@ -41,12 +41,40 @@ def saldo_de(conn: sqlite3.Connection, filamento_id: int) -> float:
     return row["saldo_g"]
 
 
+def buscar_filamento(conn: sqlite3.Connection, material: str, cor: str):
+    """Casamento por material+cor sem diferenciar maiúscula/minúscula nem
+    espaço nas pontas — 'PLA'/'pla ' e 'Azul'/'azul' são o mesmo filamento."""
+    return conn.execute(
+        "SELECT * FROM filamentos WHERE LOWER(TRIM(material)) = LOWER(TRIM(?)) "
+        "AND LOWER(TRIM(cor)) = LOWER(TRIM(?))",
+        (material, cor),
+    ).fetchone()
+
+
 def adicionar_filamento(
     conn: sqlite3.Connection, material: str, cor: str, quantidade_inicial_g: float = 0.0
-) -> int:
+) -> tuple[int, bool]:
     """Cadastra um novo tipo de filamento e, se houver quantidade inicial, já
     registra a primeira entrada — sem isso o filamento apareceria com saldo
-    0 mesmo já tendo material guardado."""
+    0 mesmo já tendo material guardado.
+
+    Se já existir um filamento com o mesmo material+cor, NÃO cria uma linha
+    duplicada — mescla registrando a quantidade como entrada no filamento
+    existente. Sem essa checagem, cadastrar "PLA Azul" duas vezes fragmentava
+    o mesmo estoque em duas linhas (bug real encontrado em revisão).
+
+    Devolve (filamento_id, criado_novo) — `criado_novo` é False quando
+    mesclou com um cadastro já existente, pra interface avisar o usuário."""
+    existente = buscar_filamento(conn, material, cor)
+    if existente:
+        filamento_id = existente["id"]
+        if quantidade_inicial_g > 0:
+            registrar_movimento(
+                conn, filamento_id, "entrada", quantidade_inicial_g,
+                "estoque adicional (mesclado com cadastro já existente)",
+            )
+        return filamento_id, False
+
     agora = datetime.datetime.now().isoformat(timespec="seconds")
     cur = conn.execute(
         "INSERT INTO filamentos (material, cor, criado_em) VALUES (?, ?, ?)",
@@ -56,7 +84,7 @@ def adicionar_filamento(
     if quantidade_inicial_g > 0:
         registrar_movimento(conn, filamento_id, "entrada", quantidade_inicial_g, "estoque inicial")
     conn.commit()
-    return filamento_id
+    return filamento_id, True
 
 
 def excluir_filamento(conn: sqlite3.Connection, filamento_id: int):
