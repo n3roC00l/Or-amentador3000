@@ -1,5 +1,58 @@
 # Estoque e Cotação de Filamentos — Cilla Tech Park
 
+## Revisão de qualidade e identidade visual (29/07/2026, à tarde)
+
+Pedido do dono do sistema: revisão como engenheiro de software pensando em
+uso corporativo multiusuário, e interface com cara profissional (não a
+aparência padrão de app Streamlit de protótipo).
+
+**Bugs reais encontrados e corrigidos:**
+- **Duplicidade silenciosa**: `estoque.adicionar_filamento` cadastrava um
+  novo filamento mesmo quando material+cor já existia — testei ao vivo
+  ("PLA Azul" duas vezes virava duas linhas, 1850g e 500g, em vez de uma
+  só com 2350g). Corrigido: agora casa por material+cor (sem diferenciar
+  maiúscula/espaço nas pontas) e, se já existe, **mescla** — registra a
+  quantidade nova como entrada no cadastro existente em vez de duplicar.
+  Interface avisa "já existia — mesclado" nesse caso.
+- **Botão "Excluir" sem barreira no código** (achado na rodada de teste
+  anterior): só dependia do atributo visual `disabled` do Streamlit.
+- **Toolbar de desenvolvedor exposta**: o menu "⋮"/"Deploy" do Streamlit
+  (chrome de ambiente de dev) aparecia pra qualquer usuário. Escondido via
+  `.streamlit/config.toml` (`toolbarMode = "minimal"`).
+- **Formatação inconsistente**: KPIs mostravam separador de milhar e as
+  tabelas não (ou usavam convenção diferente entre si). Padronizado em
+  toda a tela. Datas passaram de timestamp ISO cru
+  (`2026-07-29T14:09:52`) para `29/07/2026 14:09`.
+
+**Identidade visual:** tema claro fixo com a cor da marca (`#2a78d6`) via
+`.streamlit/config.toml` — não muda com o SO/tema de quem abre, pra manter
+a marca consistente pra todo mundo que acessar. Seções da aba Estoque
+viraram cards com ícone (➕ Adicionar, 🔁 Registrar, 🗑️ Excluir, 🕘
+Histórico) em vez de colunas soltas com texto em negrito.
+
+**Adicionado:** campo de busca/filtro (por material ou cor) nas duas abas
+— sem isso, um catálogo maior de filamentos vira uma lista rolável sem
+jeito de achar nada rápido.
+
+Validado com testes automatizados (`streamlit.testing.v1.AppTest`,
+cobrindo mesclagem de duplicata, busca, movimentação e exclusão) e
+conferido visualmente com screenshots reais via Chromium headless (não só
+leitura de código) — inclusive num viewport de celular (430px), pra
+checar que as colunas não quebram feio em tela estreita.
+
+**Ficou de fora desta rodada, de propósito** (pedido explícito do dono:
+"resolva os bugs de qualidade primeiro") — são os 4 pontos "críticos" da
+revisão de engenharia que motivou essa rodada, ainda pendentes:
+1. **Sem autenticação** — qualquer um com o link vê/edita/exclui o estoque
+   de todo mundo.
+2. **Só roda em `localhost`** — ninguém fora desta máquina acessa ainda;
+   falta um deploy real.
+3. **SQLite não aguenta bem escrita concorrente de várias pessoas** ao
+   mesmo tempo — ok pra 1 usuário, ponto de estrangulamento real num
+   "sistema corporativo" de verdade.
+4. **Sem registro de autoria** nas movimentações (`motivo` é texto livre,
+   não há campo "quem fez").
+
 ## O que já está pronto e testado (29/07/2026)
 
 **Mudança de rumo nesta data:** o fluxo deixou de ser "raspar as 3 lojas e
