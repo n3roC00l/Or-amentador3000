@@ -41,6 +41,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+import auth
 import estoque
 from db import conectar, inicializar
 from relatorio_cotacao import gerar as gerar_relatorio
@@ -50,6 +51,93 @@ _LOGO_PATH = Path(__file__).parent / "logo.jpg"
 
 st.set_page_config(page_title="Filamentos — Cilla Tech Park", layout="wide", page_icon="🧵")
 inicializar()
+
+_conn_seed = conectar()
+auth.seed_inicial(_conn_seed)
+_conn_seed.close()
+
+# Login (12/08/2026, migrado pro banco em 12/08/2026): até aqui o app não
+# tinha nenhuma barreira — qualquer um com o link via/editava/excluía o
+# estoque de todo mundo. Virou um risco real quando o app passou a ficar
+# acessível pra rede local inteira, não só localhost. Contas ficam na
+# tabela `usuarios` (ver `auth.py`), geridas pela aba Administração — não
+# mais em `.streamlit/secrets.toml`. Guarda-se a CONTA INTEIRA (não só o
+# nome) em `st.session_state["usuario"]`, porque o resto da tela precisa
+# do `papel` (mostrar ou não a aba Administração) e da `foto` (avatar) sem
+# reconsultar o banco a cada rerun. Dura enquanto a aba do navegador ficar
+# aberta — fechar a aba exige logar de novo.
+def _autenticar() -> dict | None:
+    if st.session_state.get("usuario"):
+        return st.session_state["usuario"]
+
+    st.title(MARCA)
+    with st.form("login", border=True):
+        usuario = st.text_input("Usuário")
+        senha = st.text_input("Senha", type="password")
+        entrar = st.form_submit_button("Entrar")
+    if entrar:
+        conn = conectar()
+        linha = auth.autenticar(conn, usuario, senha)
+        conn.close()
+        if linha:
+            st.session_state["usuario"] = dict(linha)
+            st.rerun()
+        else:
+            st.error("Usuário ou senha incorretos.")
+    return None
+
+
+if not _autenticar():
+    st.stop()
+
+# Avatar calculado aqui (fora da sidebar) de propósito — ver renderização
+# fixa mais abaixo, depois do bloco de CSS principal.
+_usuario_atual = st.session_state["usuario"]
+_caminho_avatar = auth.caminho_foto(_usuario_atual)
+
+with st.sidebar:
+    st.caption(
+        f"Conectado como **{_usuario_atual['nome_usuario']}**"
+        + (" · administrador" if _usuario_atual["papel"] == "admin" else "")
+    )
+    # aberto pra QUALQUER usuário logado (não só admin) — quem não é admin
+    # só tem essa opção de auto-atendimento; tudo mais (usuário, senha,
+    # papel, foto de outra conta) é exclusivo da aba Administração.
+    with st.expander("Minha foto de perfil", icon=":material/account_circle:"):
+        # `key` inclui um contador que só sobe DEPOIS de salvar (não a cada
+        # rerun) — sem isso, o arquivo enviado continua "presente" no
+        # widget mesmo depois do `st.rerun()` abaixo (file_uploader guarda
+        # o próprio valor entre reruns, ao contrário de st.button/
+        # form_submit_button, que voltam a False sozinhos). Isso reexecutava
+        # `definir_foto` + `st.rerun()` de novo a cada rerun, num loop
+        # infinito — bug real, encontrado rodando `AppTest` com uma foto de
+        # verdade (só apareceu com um arquivo válido, que chega a completar
+        # o primeiro `st.rerun()`). Trocar a key força um widget "novo" e
+        # vazio na tela seguinte, quebrando o loop.
+        if "contador_upload_foto" not in st.session_state:
+            st.session_state["contador_upload_foto"] = 0
+        nova_foto = st.file_uploader(
+            "Escolher foto", type=list(auth.EXTENSOES_PERMITIDAS),
+            key=f"upload_foto_propria_{st.session_state['contador_upload_foto']}",
+        )
+        if nova_foto is not None:
+            conn = conectar()
+            try:
+                auth.definir_foto(
+                    conn, _usuario_atual["id"], nova_foto.getvalue(),
+                    Path(nova_foto.name).suffix.lstrip("."),
+                )
+                st.session_state["usuario"] = dict(auth.buscar_usuario_por_id(conn, _usuario_atual["id"]))
+                st.session_state["contador_upload_foto"] += 1
+                st.success("Foto atualizada.")
+                st.rerun()
+            except ValueError as e:
+                st.error(str(e))
+            finally:
+                conn.close()
+    if st.button("Sair", icon=":material/logout:"):
+        del st.session_state["usuario"]
+        st.rerun()
 
 # Tema ativo (claro/escuro), escolhido pelo usuário no menu nativo do
 # Streamlit ("☰" → Settings → Theme — ver .streamlit/config.toml). Lido aqui
@@ -122,19 +210,29 @@ COR_STATUS_AO_VIVO = "#a1f01f"
 # st.fragment(run_every=...) — ver seção ANÁLISE mais abaixo.
 INTERVALO_ATUALIZACAO_S = 15
 
-# só os ícones realmente usados na tela — mantém o download da fonte pequeno
-# em vez de puxar o conjunto inteiro do Material Symbols.
-_ICONES_USADOS = "inventory_2,description,add,swap_horiz,delete,history,request_quote,download,search,insights,monitoring"
-_FONTE_ICONES = (
-    "https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:"
-    f"opsz,wght,FILL,GRAD@20,400,0,0&icon_names={_ICONES_USADOS}"
-)
-
+# Ícones (12/08/2026 — bug real, encontrado a partir de print de tela real
+# no Firefox: "LOGOUT" sobrepondo o botão "Sair", "ARROW_DOWNWARD"
+# sobrepondo "Histórico de movimentações", "UPLOAD" sobrepondo "Browse
+# files" do uploader, e o próprio menu nativo "⋮" → tema com texto
+# ilegível sobreposto). Até aqui este bloco importava uma versão PRÓPRIA
+# (via Google Fonts) da fonte "Material Symbols Rounded", com só um
+# subconjunto de glifos, pra não baixar o conjunto inteiro à toa. Só que o
+# Streamlit já embute a MESMA fonte, com o MESMO nome exato — conferido em
+# `streamlit/static/static/css/*.css`, `@font-face{{font-family:Material
+# Symbols Rounded...}}`, arquivo local de 367KB (o conjunto completo, não
+# um subset). Duas declarações `@font-face` com o nome idêntico competem
+# pelo mesmo `font-family` no navegador; a nossa (importada depois, via
+# `st.markdown`) vencia — e como só contém os glifos que listamos aqui,
+# qualquer ícone nativo do Streamlit fora dessa lista (usado por ELE
+# mesmo, não só pelos nossos `icon=` explícitos — ex.: seta de
+# expandir/recolher, ícone de upload, ícones do menu de tema) caía pro
+# fallback de fonte, que mostra o NOME do ícone como texto puro por cima
+# do rótulo real. Correção: parar de competir pelo mesmo nome e usar a
+# fonte que o Streamlit já carrega — cobre tanto os nossos ícones quanto
+# os dele, sem lista pra manter nem dependência de rede extra.
 st.markdown(
     f"""
     <style>
-    @import url('{_FONTE_ICONES}');
-
     .md-icon {{
         font-family: 'Material Symbols Rounded';
         font-weight: normal;
@@ -166,6 +264,26 @@ st.markdown(
         font-weight: 700;
         font-size: 1.375rem;
         letter-spacing: 0.01em;
+    }}
+    /* avatar da conta logada (12/08/2026: pedido explícito do dono do
+       sistema pra continuar visível com a barra lateral fechada).
+       `position: fixed` prende ao viewport, não à barra lateral — por
+       isso é renderizado fora do `with st.sidebar:` no Python (um
+       ancestral com `transform`, que é como o Streamlit anima o
+       recolher/abrir da barra, vira o "container" do fixed e ele
+       deslizaria junto escondido; ficando de fora desse ancestral, o
+       avatar não depende do estado da barra pra continuar visível). */
+    .ctp-avatar-fixo {{
+        position: fixed;
+        top: 0.65rem;
+        left: 4.25rem;
+        width: 40px;
+        height: 40px;
+        object-fit: cover;
+        border-radius: 50%;
+        border: 2px solid {COR_MARCA};
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+        z-index: 999999;
     }}
     .ctp-subtitulo {{
         color: {COR_TEXTO_SECUNDARIO};
@@ -260,6 +378,15 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+if _caminho_avatar and _caminho_avatar.exists():
+    _mime_avatar = "image/png" if _caminho_avatar.suffix.lower() == ".png" else "image/jpeg"
+    st.markdown(
+        f'<img class="ctp-avatar-fixo" '
+        f'src="data:{_mime_avatar};base64,{base64.b64encode(_caminho_avatar.read_bytes()).decode("ascii")}" '
+        f'alt="Foto de perfil de {_usuario_atual["nome_usuario"]}" />',
+        unsafe_allow_html=True,
+    )
+
 
 def _titulo_secao(icone: str, texto: str):
     """Título de seção/card padronizado: ícone Material Symbols + texto,
@@ -270,7 +397,11 @@ def _titulo_secao(icone: str, texto: str):
     )
 
 
-aba_estoque, aba_cotacao, aba_analise = st.tabs(["Estoque", "Cotação", "Análise"])
+_EH_ADMIN = st.session_state["usuario"]["papel"] == "admin"
+_nomes_abas = ["Estoque", "Cotação", "Análise"] + (["Administração"] if _EH_ADMIN else [])
+_abas = st.tabs(_nomes_abas)
+aba_estoque, aba_cotacao, aba_analise = _abas[0], _abas[1], _abas[2]
+aba_admin = _abas[3] if _EH_ADMIN else None
 
 
 def _status_saldo(saldo_kg: float) -> tuple[str, str, str]:
@@ -488,7 +619,17 @@ with aba_estoque:
                 st.caption("Sem movimentações ainda.")
 
 # ============================================================ COTAÇÃO ====
-with aba_cotacao:
+def _painel_cotacao():
+    """Corpo da aba Cotação isolado numa função (12/08/2026, achado
+    corrigindo um bug real ao testar a aba Administração nova): antes vivia
+    solto sob `with aba_cotacao:` e usava `st.stop()` pro caso "sem
+    filamento cadastrado" — mas `st.stop()` interrompe o script INTEIRO na
+    hora, não só o conteúdo da aba (`with` é só posicionamento de layout,
+    não escopo de execução). Com estoque zerado, isso derrubava tudo que
+    vinha depois no arquivo (aba Análise e, agora, Administração) sem
+    aviso nenhum. Hoje não se via em produção (o estoque real nunca ficou
+    vazio), mas o botão "Excluir" da aba Estoque deixa isso alcançável; com
+    a função, `return` só sai daqui, igual `_painel_analise()` já fazia."""
     _titulo_secao("description", "Selecionar filamentos para cotação")
     st.caption(
         "Escolha quais filamentos você precisa comprar e quanto — a tela gera "
@@ -502,7 +643,7 @@ with aba_cotacao:
 
     if not filamentos_cot:
         st.warning("Cadastre filamentos na aba Estoque primeiro.", icon=":material/inventory_2:")
-        st.stop()
+        return
 
     # Estado de seleção guardado por filamento_id em session_state — NUNCA
     # confiar só no que st.data_editor devolve posicionalmente. Bug real:
@@ -612,6 +753,10 @@ with aba_cotacao:
                     icon=":material/download:",
                 )
             st.success(f"Pedido gerado com {len(itens_pedido)} item(ns).")
+
+
+with aba_cotacao:
+    _painel_cotacao()
 
 # ============================================================ ANÁLISE ====
 # Cor única nas barras (não uma cor por material): material é categoria
@@ -789,3 +934,135 @@ def _painel_analise():
 
 with aba_analise:
     _painel_analise()
+
+# ======================================================= ADMINISTRAÇÃO ====
+# Aba inteira só existe (nem aparece em st.tabs) pra quem loga com
+# papel='admin' — ver `_EH_ADMIN` acima. Dá pra ver quem tem conta e quando
+# cada um acessou, cadastrar gente nova e editar qualquer conta (usuário,
+# senha, papel, foto). Pedido explícito do dono do sistema: usuários
+# comuns só têm a auto-troca de foto na barra lateral (ver `_autenticar`
+# acima) — tudo mais aqui é exclusivo de admin.
+if _EH_ADMIN:
+    with aba_admin:
+        conn = conectar()
+        usuarios = [dict(u) for u in auth.listar_usuarios(conn)]
+        conn.close()
+
+        _titulo_secao("admin_panel_settings", "Contas de acesso")
+        st.dataframe(
+            pd.DataFrame([
+                {
+                    "Usuário": u["nome_usuario"],
+                    "Papel": "Administrador" if u["papel"] == "admin" else "Usuário",
+                    "Foto": "Sim" if u["foto"] else "—",
+                    "Criado em": pd.to_datetime(u["criado_em"]),
+                    "Último acesso": pd.to_datetime(u["ultimo_acesso"]) if u["ultimo_acesso"] else pd.NaT,
+                }
+                for u in usuarios
+            ]),
+            hide_index=True,
+            width="stretch",
+            column_config={
+                "Criado em": st.column_config.DatetimeColumn(format="DD/MM/YYYY HH:mm"),
+                "Último acesso": st.column_config.DatetimeColumn(format="DD/MM/YYYY HH:mm"),
+            },
+        )
+
+        st.markdown("###")
+        col_novo, col_editar = st.columns(2)
+
+        with col_novo:
+            with st.form("form_novo_usuario", clear_on_submit=True):
+                _titulo_secao("person_add", "Cadastrar novo usuário")
+                novo_nome = st.text_input("Usuário")
+                nova_senha = st.text_input("Senha", type="password")
+                novo_papel = st.selectbox(
+                    "Papel", ["user", "admin"],
+                    format_func=lambda p: "Administrador" if p == "admin" else "Usuário",
+                )
+                if st.form_submit_button("Cadastrar", width="stretch", icon=":material/person_add:"):
+                    conn = conectar()
+                    try:
+                        auth.criar_usuario(conn, novo_nome, nova_senha, novo_papel)
+                        st.success(f'Usuário "{novo_nome.strip()}" cadastrado.')
+                        st.rerun()
+                    except ValueError as e:
+                        st.error(str(e))
+                    finally:
+                        conn.close()
+
+        with col_editar:
+            with st.container(key="card_editar_usuario"):
+                _titulo_secao("manage_accounts", "Editar usuário")
+                # selectbox FORA do form, de propósito: trocar a conta escolhida
+                # precisa atualizar na hora os valores pré-preenchidos do form
+                # abaixo — widget dentro de st.form só reflete no navegador depois
+                # do próximo submit, então o form continuaria mostrando os dados
+                # da conta anterior até o clique (mesmo motivo já documentado no
+                # form "Registrar entrada/saída" da aba Estoque).
+                alvo = st.selectbox(
+                    "Usuário", usuarios, key="select_editar_usuario",
+                    format_func=lambda u: u["nome_usuario"],
+                )
+                # campos pré-preenchidos ficam com key sufixada pelo id do
+                # usuário selecionado — sem isso o Streamlit reaproveita o valor
+                # já digitado/selecionado na conta anterior em vez de reiniciar
+                # com os dados da conta nova (mesma classe de bug real corrigida
+                # na tabela de seleção da aba Cotação: `value=`/`index=` só valem
+                # a primeira vez que aquela key é usada, não a cada rerun).
+                with st.form(f"form_editar_usuario_{alvo['id']}"):
+                    nome_editado = st.text_input(
+                        "Nome de usuário", value=alvo["nome_usuario"], key=f"nome_editado_{alvo['id']}"
+                    )
+                    senha_editada = st.text_input(
+                        "Nova senha", type="password", placeholder="deixe em branco pra não trocar",
+                        key=f"senha_editada_{alvo['id']}",
+                    )
+                    papel_editado = st.selectbox(
+                        "Papel", ["user", "admin"],
+                        index=["user", "admin"].index(alvo["papel"]),
+                        format_func=lambda p: "Administrador" if p == "admin" else "Usuário",
+                        key=f"papel_editado_{alvo['id']}",
+                    )
+                    foto_editada = st.file_uploader(
+                        "Nova foto (opcional)", type=list(auth.EXTENSOES_PERMITIDAS),
+                        key=f"foto_editada_{alvo['id']}",
+                    )
+                    if st.form_submit_button("Salvar alterações", width="stretch", icon=":material/save:"):
+                        conn = conectar()
+                        try:
+                            auth.alterar_usuario(
+                                conn, alvo["id"],
+                                novo_nome=nome_editado, nova_senha=senha_editada or None,
+                                novo_papel=papel_editado,
+                            )
+                            if foto_editada is not None:
+                                auth.definir_foto(
+                                    conn, alvo["id"], foto_editada.getvalue(),
+                                    Path(foto_editada.name).suffix.lstrip("."),
+                                )
+                            if alvo["id"] == st.session_state["usuario"]["id"]:
+                                st.session_state["usuario"] = dict(auth.buscar_usuario_por_id(conn, alvo["id"]))
+                            st.success("Usuário atualizado.")
+                            st.rerun()
+                        except ValueError as e:
+                            st.error(str(e))
+                        finally:
+                            conn.close()
+
+        with st.expander("Histórico de acessos", icon=":material/history:"):
+            conn = conectar()
+            acessos = auth.historico_acessos(conn)
+            conn.close()
+            if acessos:
+                st.dataframe(
+                    pd.DataFrame([
+                        {"Usuário": a["nome_usuario"], "Acesso em": pd.to_datetime(a["logado_em"])}
+                        for a in acessos
+                    ]),
+                    hide_index=True,
+                    width="stretch",
+                    column_config={"Acesso em": st.column_config.DatetimeColumn(format="DD/MM/YYYY HH:mm")},
+                )
+            else:
+                st.caption("Sem acessos registrados ainda.")

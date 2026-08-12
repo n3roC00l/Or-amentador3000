@@ -39,6 +39,15 @@ alerta de cor por linha (vermelho/amarelo/verde conforme saldo, ver
 `_status_saldo` em `streamlit_app.py`) reusando as cores semânticas de
 erro/atenção/sucesso já documentadas abaixo.
 
+**Aba Administração + avatar na barra lateral (12/08/2026):** também sem
+entrada própria neste guia — registrado por completude. Reaproveita 100%
+os componentes visuais já existentes (`_titulo_secao`, cartão via
+`st.form`/`st.container(key=...)`, `st.dataframe` com `column_config` de
+data): nenhuma cor, tipografia ou padrão de layout novo entrou por causa
+dela. Único acréscimo visual real é o avatar circular pequeno
+(`st.image`, 64px) no topo da barra lateral, mostrado só quando a conta
+tem foto.
+
 **Atualização de paleta (29/07/2026, à noite):** a paleta original abaixo
 foi substituída pela paleta real do **Espaço Maker CTP**
 (`espa-o-maker.vercel.app`) — outro sistema interno da Cilla Tech Park
@@ -142,6 +151,22 @@ mesma fonte — um único sistema de ícone em toda a tela.
 | ⬇️ Baixar | `download` |
 | (busca, sem ícone hoje) | `search` |
 
+**Correção de bug real (12/08/2026):** o plano original abaixo carregava
+via Google Fonts (`@import`) só o subconjunto de glifos "realmente
+usados" — intenção certa (baixar menos), execução com um problema sério:
+o Streamlit já embute a própria fonte **com o mesmo nome exato**
+("Material Symbols Rounded", conferido no CSS estático dele). Duas
+declarações `@font-face` para o mesmo nome competem no navegador: a nossa
+(subset) vencia, e qualquer ícone que o PRÓPRIO Streamlit usa
+internamente fora da nossa lista — a seta de expandir/recolher do
+`st.expander`, o ícone de upload do `st.file_uploader`, ícones do menu
+nativo "☰" → tema — caía no fallback de fonte, que mostra o nome do ícone
+como texto puro sobreposto ao rótulo real. Encontrado por print de tela
+real no Firefox (não aparecia em teste automatizado, que não confere
+fonte/CSS). Corrigido removendo o `@import` próprio e apontando `.md-icon`
+pra a mesma fonte que o Streamlit já carrega (arquivo local, conjunto
+completo, sem restrição) — resolve pros dois lados sem lista pra manter.
+
 ## Layout / componentes
 
 - **Cards**: fundo branco sobre página cinza-clara, borda 1px + sombra
@@ -161,8 +186,10 @@ mesma fonte — um único sistema de ícone em toda a tela.
 - `st.dataframe`/`st.data_editor` renderiza célula via canvas, não HTML —
   o que o tema do Streamlit expõe (fonte geral, cor de cabeçalho, borda) dá
   pra controlar; refinamento fino dentro da grade pode ter limite.
-- Ícones via Google Fonts (CDN) — mesma dependência de rede que o próprio
-  Streamlit já tem hoje; a query pode ser restrita só aos ícones usados.
+- ~~Ícones via Google Fonts (CDN)~~ — removido em 12/08/2026: causava
+  colisão de `font-family` com a fonte que o próprio Streamlit já embute
+  localmente (ver nota na seção Ícones). Hoje não há dependência de CDN
+  pros ícones — só a fonte local do Streamlit.
 - Testes `AppTest` usam `label`, não estilo, então não devem quebrar com
   isso — reconferir de qualquer forma após qualquer mudança estrutural.
 

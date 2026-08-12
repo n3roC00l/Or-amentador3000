@@ -96,3 +96,16 @@ dataframeHeaderBackgroundColor = "#17293f"
 # que este arquivo agora oferece. Sem isso não haveria como o usuário
 # alcançar o tema escuro pela interface.
 toolbarMode = "viewer"
+
+[server]
+# Hospedagem na rede local (12/08/2026): "0.0.0.0" escuta em todas as
+# interfaces da máquina, não só localhost — sem isso nenhum outro
+# dispositivo na rede consegue abrir o link, só a própria máquina. Porta
+# 8501 é a padrão do Streamlit, mantida pra não exigir configuração extra
+# em quem já tinha o link salvo.
+address = "0.0.0.0"
+port = 8501
+# headless=true evita o Streamlit tentar abrir aba de navegador local (não
+# faz sentido rodando como serviço em segundo plano) e pula o prompt de
+# e-mail de primeiro uso, que travaria o processo esperando input.
+headless = true

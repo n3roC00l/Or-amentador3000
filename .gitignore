@@ -6,3 +6,4 @@ cotacoes.db
 mapa_de_cotacao_*.xlsx
 pedido_de_cotacao_*.xlsx
 .streamlit/secrets.toml
+perfis/

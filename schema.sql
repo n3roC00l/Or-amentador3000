@@ -28,6 +28,36 @@ CREATE TABLE IF NOT EXISTS movimentos_estoque (
 CREATE INDEX IF NOT EXISTS idx_movimentos_filamento
     ON movimentos_estoque(filamento_id, criado_em);
 
+-- Contas de acesso ao sistema (12/08/2026). Antes viviam fixas em
+-- `.streamlit/secrets.toml` — virou tabela pra dar pra cadastrar/editar
+-- pela própria interface (aba Administração, só pro papel 'admin'; ver
+-- `auth.py`). Senha nunca fica em texto puro: `senha_hash` guarda o hash
+-- PBKDF2-HMAC-SHA256 e `senha_salt` o salt aleatório usado nele. `foto`
+-- guarda só o nome do arquivo dentro de `perfis/` (fora do git, dado
+-- pessoal) — NULL até a pessoa (ou o admin por ela) escolher uma.
+CREATE TABLE IF NOT EXISTS usuarios (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome_usuario    TEXT NOT NULL UNIQUE,
+    senha_hash      TEXT NOT NULL,
+    senha_salt      TEXT NOT NULL,
+    papel           TEXT NOT NULL DEFAULT 'user',   -- 'admin' | 'user'
+    foto            TEXT,
+    criado_em       TEXT NOT NULL
+);
+
+-- Histórico de logins bem-sucedidos, pra aba Administração mostrar quando
+-- cada um acessou. Mesmo princípio "nunca sobrescreve" de
+-- `movimentos_estoque`/`cotacoes`: cada login gera uma linha nova, nunca
+-- uma coluna "último acesso" que se perde no meio do caminho.
+CREATE TABLE IF NOT EXISTS acessos (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    usuario_id      INTEGER NOT NULL REFERENCES usuarios(id),
+    logado_em       TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_acessos_usuario
+    ON acessos(usuario_id, logado_em);
+
 -- --- a partir daqui: fluxo antigo de cotação ao vivo (raspagem das 3 lojas
 -- e comparação automática de preço). Substituído em 29/07/2026 pelo fluxo
 -- de estoque + pedido de cotação manual (ver `estoque.py` e
