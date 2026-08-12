@@ -123,3 +123,61 @@ def historico_de(conn: sqlite3.Connection, filamento_id: int):
         "SELECT * FROM movimentos_estoque WHERE filamento_id = ? ORDER BY criado_em DESC",
         (filamento_id,),
     ).fetchall()
+
+
+def saldo_por_material(conn: sqlite3.Connection):
+    """Saldo agregado por material (soma de todas as cores), maior saldo
+    primeiro — alimenta o gráfico de estoque por material da aba Análise."""
+    return conn.execute("""
+        SELECT f.material,
+               COALESCE(SUM(
+                   CASE WHEN m.tipo = 'entrada' THEN m.quantidade_g
+                        WHEN m.tipo = 'saida' THEN -m.quantidade_g
+                        ELSE 0 END
+               ), 0) AS saldo_g
+        FROM filamentos f
+        LEFT JOIN movimentos_estoque m ON m.filamento_id = f.id
+        GROUP BY f.material
+        ORDER BY saldo_g DESC
+    """).fetchall()
+
+
+def uso_medio_semanal(conn: sqlite3.Connection, min_semanas: float = 1.0) -> dict:
+    """Uso médio semanal de cada filamento, calculado sobre TODO o histórico
+    de saída: total retirado dividido pelo nº de semanas desde a primeira
+    saída registrada até agora ("média de todo o histórico", não média
+    móvel — decisão explícita do dono do sistema).
+
+    Um filamento sem nenhuma saída registrada simplesmente não aparece no
+    dict devolvido — não existe média pra ele, e isso não é o mesmo que
+    "uso zero" (pode só não ter sido consumido ainda, ou o consumo nunca
+    foi lançado no sistema). Com menos de `min_semanas` de histórico desde
+    a primeira saída, o filamento aparece com `media_semanal_g=None`: dividir
+    por uma janela tão curta faz o número disparar (uma única saída de
+    ontem "viraria" milhares de gramas/semana extrapolados) — melhor não
+    mostrar um número do que mostrar um enganoso.
+
+    Devolve dict: filamento_id -> {"total_saida_g", "semanas_historico",
+    "media_semanal_g"}.
+    """
+    linhas = conn.execute("""
+        SELECT filamento_id,
+               SUM(quantidade_g) AS total_saida_g,
+               MIN(criado_em) AS primeira_saida
+        FROM movimentos_estoque
+        WHERE tipo = 'saida'
+        GROUP BY filamento_id
+    """).fetchall()
+
+    agora = datetime.datetime.now()
+    resultado = {}
+    for linha in linhas:
+        primeira = datetime.datetime.fromisoformat(linha["primeira_saida"])
+        semanas = (agora - primeira).total_seconds() / (7 * 24 * 3600)
+        media = linha["total_saida_g"] / semanas if semanas >= min_semanas else None
+        resultado[linha["filamento_id"]] = {
+            "total_saida_g": linha["total_saida_g"],
+            "semanas_historico": semanas,
+            "media_semanal_g": media,
+        }
+    return resultado

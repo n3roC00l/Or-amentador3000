@@ -6,11 +6,15 @@ Rodar localmente:
     streamlit run streamlit_app.py
 
 Tema visual (paleta, tipografia, tokens de tabela) fica em
-`.streamlit/config.toml`. O CSS neste arquivo cobre só o que o tema do
-Streamlit não alcança: anatomia de card, ícones (Material Symbols Rounded,
-zero emoji) e o botão "Excluir" como ação destrutiva. Guia completo de
-design (paleta/tipografia/ícones) em `DESIGN.md` — qualquer ajuste visual
-aqui deveria primeiro atualizar aquele arquivo.
+`.streamlit/config.toml`, que define claro E escuro (`[theme.light]`/
+`[theme.dark]`) — o usuário troca no menu nativo "☰" → Settings → Theme. O
+CSS neste arquivo cobre só o que o tema nativo não alcança (cabeçalho, card,
+ícones, botão "Excluir" como ação destrutiva) e por isso lê `st.context.
+theme.type` pra saber qual paleta usar nesses elementos customizados — sem
+isso o cabeçalho/cards ficariam presos no claro mesmo com o resto da tela em
+modo escuro. Guia completo de design (paleta/tipografia/ícones) em
+`DESIGN.md` — qualquer ajuste visual aqui deveria primeiro atualizar aquele
+arquivo.
 
 Fonte de verdade é o SQLite (cotacoes.db). Duas abas:
 
@@ -29,32 +33,102 @@ Fonte de verdade é o SQLite (cotacoes.db). Duas abas:
   fluxo antigo continua existindo em `collector.py`, mas dormente — rode
   por linha de comando se quiser reativar).
 """
+import base64
 import datetime
+from pathlib import Path
 
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 
 import estoque
 from db import conectar, inicializar
 from relatorio_cotacao import gerar as gerar_relatorio
 
-# paleta alinhada ao Espaço Maker CTP (espa-o-maker.vercel.app) — ver DESIGN.md
 MARCA = "Cilla Tech Park"
-COR_MARCA = "#063a70"
-COR_BORDA = "#e2e8f0"
-COR_ERRO_TEXTO = "#b3261e"
-COR_ERRO_FUNDO = "#fdecea"
+_LOGO_PATH = Path(__file__).parent / "logo.jpg"
+
+st.set_page_config(page_title="Filamentos — Cilla Tech Park", layout="wide", page_icon="🧵")
+inicializar()
+
+# Tema ativo (claro/escuro), escolhido pelo usuário no menu nativo do
+# Streamlit ("☰" → Settings → Theme — ver .streamlit/config.toml). Lido aqui
+# porque o CSS customizado deste arquivo (cabeçalho, cards, ícones) não é
+# alcançado pelo tema nativo, que só cobre os próprios widgets do Streamlit
+# (botão, campo, tabela); sem reler o tema aqui esses elementos ficariam
+# presos no claro mesmo com o resto da tela em modo escuro.
+# `st.context.theme.type` pode vir incorreto por 1 run logo após o usuário
+# trocar de tema (limitação documentada do Streamlit, não bug nosso) — sem
+# consequência séria aqui, corrige sozinho no run seguinte.
+_ESCURO = (st.context.theme.type or "light") == "dark"
+
+# paleta alinhada ao Espaço Maker CTP (espa-o-maker.vercel.app) — ver
+# DESIGN.md. Par claro/escuro: os valores claros são os originais (usados
+# desde 29/07/2026); os escuros foram conferidos com o validador de
+# contraste da skill de dataviz contra o fundo `#0a1628` antes de entrar
+# aqui (todos ≥ 4.5:1 — ver .streamlit/config.toml pro detalhe por cor).
+if _ESCURO:
+    COR_MARCA = "#3987e5"
+    COR_SUPERFICIE = "#13233a"
+    COR_BORDA = "#24354c"
+    COR_TEXTO = "#f2f5f9"
+    COR_TEXTO_SECUNDARIO = "#b8c4d4"
+    COR_TEXTO_MUTED = "#5b7590"
+    COR_ERRO_TEXTO = "#ff8a8a"
+    COR_ERRO_FUNDO = "#3a1518"
+    COR_ATENCAO_TEXTO = "#ffb84d"
+    COR_ATENCAO_FUNDO = "#3a2a10"
+    COR_SUCESSO_TEXTO = "#a1f01f"
+    COR_SUCESSO_FUNDO = "#1f2e0a"
+else:
+    COR_MARCA = "#063a70"
+    COR_SUPERFICIE = "#ffffff"
+    COR_BORDA = "#e2e8f0"
+    COR_TEXTO = "#0a1628"
+    COR_TEXTO_SECUNDARIO = "#4b5769"
+    COR_TEXTO_MUTED = "#8898aa"
+    COR_ERRO_TEXTO = "#b3261e"
+    COR_ERRO_FUNDO = "#fdecea"
+    COR_ATENCAO_TEXTO = "#a15c00"
+    COR_ATENCAO_FUNDO = "#fdf3e3"
+    COR_SUCESSO_TEXTO = "#3f6212"
+    COR_SUCESSO_FUNDO = "#d4f89e"
+
+# faixas de alerta de saldo baixo na tabela de estoque (pedido explícito do
+# dono do sistema) — reusa as mesmas cores semânticas de erro/atenção/
+# sucesso já usadas em st.error/warning/success no resto do app, em vez de
+# introduzir uma paleta nova só pra isso.
+LIMITE_CRITICO_KG = 1.0
+LIMITE_ATENCAO_KG = 3.0
+
+# painel "centro de controle" da aba Análise — fica escuro sempre, mesmo
+# com o resto do app no tema claro (não usa `_ESCURO`: é uma escolha visual
+# fixa pra aquele painel, independente do tema escolhido pelo usuário no
+# menu nativo). Fundo e "marca escura" são os tons documentados em
+# DESIGN.md (`#021e3a`), até então "uso futuro". O azul-glow das barras é
+# um degrau mais claro da MESMA família de
+# marca (não o lime): lime é reservado a indicador de status/sucesso em
+# todo o resto do sistema — usá-lo pra codificar quantidade nas barras
+# quebraria essa convenção e faria a barra mais alta parecer um alerta de
+# "sucesso" em vez de só "maior valor". Contraste de todas as cores abaixo
+# contra o fundo escuro conferido com o validador da skill de dataviz antes
+# de usar (branco 16.8:1, glow 4.6:1, texto secundário 9.5:1, lime 12:1).
+COR_ESCURO_FUNDO = "#021e3a"
+COR_ESCURO_GLOW = "#3987e5"
+COR_ESCURO_TEXTO_SECUNDARIO = "#b8c4d4"
+COR_STATUS_AO_VIVO = "#a1f01f"
+
+# aba Análise: intervalo de auto-atualização do gráfico/tabela via
+# st.fragment(run_every=...) — ver seção ANÁLISE mais abaixo.
+INTERVALO_ATUALIZACAO_S = 15
 
 # só os ícones realmente usados na tela — mantém o download da fonte pequeno
 # em vez de puxar o conjunto inteiro do Material Symbols.
-_ICONES_USADOS = "inventory_2,description,add,swap_horiz,delete,history,request_quote,download,search"
+_ICONES_USADOS = "inventory_2,description,add,swap_horiz,delete,history,request_quote,download,search,insights,monitoring"
 _FONTE_ICONES = (
     "https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:"
     f"opsz,wght,FILL,GRAD@20,400,0,0&icon_names={_ICONES_USADOS}"
 )
-
-st.set_page_config(page_title="Filamentos — Cilla Tech Park", layout="wide", page_icon="🧵")
-inicializar()
 
 st.markdown(
     f"""
@@ -73,11 +147,19 @@ st.markdown(
 
     .ctp-header {{
         display: flex;
-        align-items: baseline;
-        gap: 0.7rem;
+        align-items: center;
+        gap: 0.85rem;
         border-bottom: 2px solid {COR_MARCA};
         padding-bottom: 0.7rem;
         margin-bottom: 1.4rem;
+    }}
+    .ctp-logo {{
+        height: 42px;
+        width: 42px;
+        object-fit: cover;
+        border-radius: 0.5rem;
+        border: 1px solid {COR_BORDA};
+        flex-shrink: 0;
     }}
     .ctp-marca {{
         color: {COR_MARCA};
@@ -86,7 +168,7 @@ st.markdown(
         letter-spacing: 0.01em;
     }}
     .ctp-subtitulo {{
-        color: #4b5769;
+        color: {COR_TEXTO_SECUNDARIO};
         font-size: 0.9375rem;
     }}
 
@@ -96,7 +178,7 @@ st.markdown(
         gap: 0.5rem;
         font-size: 1.0625rem;
         font-weight: 600;
-        color: #0a1628;
+        color: {COR_TEXTO};
         margin: 0 0 0.7rem 0;
     }}
     .ctp-secao .md-icon {{
@@ -104,10 +186,11 @@ st.markdown(
     }}
 
     /* cards: formulários e o container da coluna Excluir recebem a mesma
-       superfície branca elevada sobre o fundo cinza da página — sem isso
-       cada seção era só uma caixa com borda fina genérica do Streamlit. */
+       superfície elevada sobre o fundo da página — sem isso cada seção era
+       só uma caixa com borda fina genérica do Streamlit. `COR_SUPERFICIE`
+       já vem certa pro tema ativo (branco no claro, navy-escuro no escuro). */
     div[data-testid="stForm"], [class*="st-key-card_"] {{
-        background: #ffffff;
+        background: {COR_SUPERFICIE};
         border: 1px solid {COR_BORDA};
         border-radius: 0.6rem;
         padding: 1.25rem 1.25rem 1rem 1.25rem;
@@ -121,18 +204,55 @@ st.markdown(
     .st-key-card_excluir div[data-testid="stButton"] button {{
         border-color: {COR_ERRO_TEXTO} !important;
         color: {COR_ERRO_TEXTO} !important;
-        background: #ffffff !important;
+        background: {COR_SUPERFICIE} !important;
     }}
     .st-key-card_excluir div[data-testid="stButton"] button:hover:not(:disabled) {{
         background: {COR_ERRO_FUNDO} !important;
     }}
     .st-key-card_excluir div[data-testid="stButton"] button:disabled {{
         border-color: {COR_BORDA} !important;
-        color: #8898aa !important;
-        background: #ffffff !important;
+        color: {COR_TEXTO_MUTED} !important;
+        background: {COR_SUPERFICIE} !important;
+    }}
+
+    /* painel "centro de controle" (só o gráfico da aba Análise) — sobrepõe
+       o cartão claro genérico acima (mesmo seletor de prefixo, declarado
+       depois: vence por ordem no CSS). Sombra colorida em vez de cinza
+       neutra pra reforçar a sensação de painel iluminado. */
+    [class*="st-key-card_escuro_"] {{
+        background: {COR_ESCURO_FUNDO} !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        box-shadow: 0 12px 32px rgba(2, 30, 58, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.03) !important;
+    }}
+    [class*="st-key-card_escuro_"] .ctp-secao {{
+        color: #ffffff;
+    }}
+    [class*="st-key-card_escuro_"] .ctp-secao .md-icon {{
+        color: {COR_ESCURO_GLOW};
+    }}
+    .ctp-caption-escuro {{
+        color: {COR_ESCURO_TEXTO_SECUNDARIO};
+        font-size: 0.8125rem;
+        margin: -0.4rem 0 0.9rem 0;
+    }}
+    .ctp-live-dot {{
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: {COR_STATUS_AO_VIVO};
+        box-shadow: 0 0 6px 2px rgba(161, 240, 31, 0.65);
+        margin-right: 0.4rem;
+        vertical-align: middle;
+        animation: ctp-pulse 1.8s ease-in-out infinite;
+    }}
+    @keyframes ctp-pulse {{
+        0%, 100% {{ opacity: 1; }}
+        50% {{ opacity: 0.35; }}
     }}
     </style>
     <div class="ctp-header">
+        <img class="ctp-logo" src="data:image/jpeg;base64,{base64.b64encode(_LOGO_PATH.read_bytes()).decode("ascii")}" alt="Logotipo {MARCA}" />
         <span class="ctp-marca">{MARCA}</span>
         <span class="ctp-subtitulo">Estoque e Cotação de Filamentos 3D</span>
     </div>
@@ -150,7 +270,21 @@ def _titulo_secao(icone: str, texto: str):
     )
 
 
-aba_estoque, aba_cotacao = st.tabs(["Estoque", "Cotação"])
+aba_estoque, aba_cotacao, aba_analise = st.tabs(["Estoque", "Cotação", "Análise"])
+
+
+def _status_saldo(saldo_kg: float) -> tuple[str, str, str]:
+    """Classifica o saldo em 3 faixas de alerta visual (pedido explícito do
+    dono do sistema): abaixo de 1kg = crítico (vermelho), de 1kg até 3kg =
+    atenção (amarelo), acima de 3kg = adequado (verde). Nos limites exatos
+    (1kg, 3kg) o saldo entra na faixa mais alta — 1kg conta como "atenção",
+    não "crítico"; 3kg conta como "adequado", não "atenção". Devolve
+    (rótulo, cor do texto, cor de fundo)."""
+    if saldo_kg < LIMITE_CRITICO_KG:
+        return "Crítico", COR_ERRO_TEXTO, COR_ERRO_FUNDO
+    if saldo_kg < LIMITE_ATENCAO_KG:
+        return "Atenção", COR_ATENCAO_TEXTO, COR_ATENCAO_FUNDO
+    return "Adequado", COR_SUCESSO_TEXTO, COR_SUCESSO_FUNDO
 
 
 def _tabela_filamentos(lista, incluir_kg=True):
@@ -159,16 +293,26 @@ def _tabela_filamentos(lista, incluir_kg=True):
     em vez de número cru)."""
     linhas = []
     for f in lista:
+        saldo_kg = f["saldo_g"] / 1000
         linha = {
             "Material": f["material"],
             "Cor": f["cor"],
             "Saldo (g)": f["saldo_g"],
         }
         if incluir_kg:
-            linha["Saldo (kg)"] = round(f["saldo_g"] / 1000, 3)
+            linha["Saldo (kg)"] = round(saldo_kg, 3)
+        linha["Status"] = _status_saldo(saldo_kg)[0]
         linha["Cadastrado em"] = pd.to_datetime(f["criado_em"])
         linhas.append(linha)
     return pd.DataFrame(linhas)
+
+
+def _colorir_por_status(row: pd.Series) -> list[str]:
+    """Estilo de linha (pandas Styler) pra `st.dataframe` — toda a linha do
+    filamento fica com o alerta de cor, não só a célula do saldo, pra ficar
+    claro que é o filamento inteiro que está com estoque baixo."""
+    _, cor_texto, cor_fundo = _status_saldo(row["Saldo (g)"] / 1000)
+    return [f"background-color: {cor_fundo}; color: {cor_texto};"] * len(row)
 
 
 # ============================================================ ESTOQUE ====
@@ -207,7 +351,7 @@ with aba_estoque:
         if filtrados:
             df_estoque = _tabela_filamentos(filtrados)
             st.dataframe(
-                df_estoque,
+                df_estoque.style.apply(_colorir_por_status, axis=1),
                 hide_index=True,
                 width="stretch",
                 column_config={
@@ -215,6 +359,11 @@ with aba_estoque:
                     "Saldo (kg)": st.column_config.NumberColumn(format="%,.2f"),
                     "Cadastrado em": st.column_config.DatetimeColumn(format="DD/MM/YYYY HH:mm"),
                 },
+            )
+            st.caption(
+                f"Crítico: abaixo de {LIMITE_CRITICO_KG:.0f}kg  •  "
+                f"Atenção: de {LIMITE_CRITICO_KG:.0f}kg até {LIMITE_ATENCAO_KG:.0f}kg  •  "
+                f"Adequado: acima de {LIMITE_ATENCAO_KG:.0f}kg"
             )
         else:
             st.caption(f"Nenhum filamento bate com \"{busca}\".")
@@ -463,3 +612,180 @@ with aba_cotacao:
                     icon=":material/download:",
                 )
             st.success(f"Pedido gerado com {len(itens_pedido)} item(ns).")
+
+# ============================================================ ANÁLISE ====
+# Cor única nas barras (não uma cor por material): material é categoria
+# nominal — a ordem não carrega significado — e o gráfico tem só uma série
+# (saldo). Colorir cada barra de um jeito diferente gastaria o canal de
+# identidade pra re-codificar o que o comprimento da barra já mostra sozinho
+# (e exigiria legenda pra decodificar, sem necessidade: o rótulo já está no
+# eixo). O "glow" é estético (tom mais claro da mesma família azul da marca),
+# não outra cor de identidade — continua sendo uma cor fazendo um trabalho só.
+
+
+def _grafico_estoque_por_material(dados_material: list[dict]):
+    """Medidores horizontais (trilho + preenchimento), maior saldo no topo —
+    estética de painel de controle pedida explicitamente pelo dono do
+    sistema. Trilho = capacidade de referência (maior saldo entre os
+    materiais); preenchimento = saldo real de cada um, azul-glow com ponta
+    arredondada. Rótulo de valor sempre visível (não só no hover) — só 5-6
+    categorias, cabe sem virar poluição. (Uma versão anterior também
+    desenhava um marcador na ponta da barra pra reforçar o "glow" — removido
+    porque colidia com o rótulo de valor, escondendo o primeiro dígito.)"""
+    dados_ordenados = list(reversed(dados_material))  # maior valor no topo
+    materiais = [d["material"] for d in dados_ordenados]
+    saldos_kg = [d["saldo_g"] / 1000 for d in dados_ordenados]
+    maior_kg = max(saldos_kg) if saldos_kg else 0
+    capacidade = [maior_kg] * len(materiais)
+
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Bar(
+            x=capacidade,
+            y=materiais,
+            orientation="h",
+            marker=dict(color="rgba(255,255,255,0.08)", cornerradius=20),
+            width=0.55,
+            hoverinfo="skip",
+            showlegend=False,
+        )
+    )
+    fig.add_trace(
+        go.Bar(
+            x=saldos_kg,
+            y=materiais,
+            orientation="h",
+            marker=dict(color=COR_ESCURO_GLOW, cornerradius=20),
+            width=0.55,
+            text=[f"{v:,.1f} kg" for v in saldos_kg],
+            textposition="outside",
+            textfont=dict(color="#ffffff", size=14, family="Inter, system-ui, sans-serif"),
+            cliponaxis=False,
+            hovertemplate="<b>%{x:,.2f} kg</b><br>%{y}<extra></extra>",
+            showlegend=False,
+        )
+    )
+    altura = 64 * len(materiais) + 40
+    fig.update_layout(
+        barmode="overlay",
+        height=altura,
+        margin=dict(l=10, r=70, t=10, b=10),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Inter, system-ui, sans-serif", color="#ffffff", size=13),
+        showlegend=False,
+        hoverlabel=dict(bgcolor=COR_ESCURO_FUNDO, bordercolor=COR_ESCURO_GLOW, font=dict(color="#ffffff")),
+        xaxis=dict(
+            visible=False,
+            range=[0, maior_kg * 1.22 if maior_kg else 1],
+        ),
+        yaxis=dict(
+            showgrid=False,
+            zeroline=False,
+            tickfont=dict(color="#ffffff", size=14, family="Inter, system-ui, sans-serif", weight=600),
+            ticksuffix="   ",
+        ),
+    )
+    return fig
+
+
+def _tabela_uso_medio(filamentos: list[dict], uso_por_id: dict) -> pd.DataFrame:
+    """Uma linha por filamento. `Uso médio semanal (g)` já sai como texto
+    pré-formatado (não um NumberColumn numérico): o `st.dataframe` desta
+    versão do Streamlit renderiza NaN como o texto literal "None" dentro de
+    NumberColumn (bug real, confirmado isolando o caso antes de escrever
+    isto — não é specific do format string, acontece até sem `format=`) —
+    então pra "sem base de cálculo" aparecer como "—" em vez de "None" pro
+    usuário, formatamos a string aqui e a coluna vira texto simples."""
+    linhas = []
+    for f in filamentos:
+        info = uso_por_id.get(f["id"])
+        if info is None:
+            media_str, base = "—", "Sem saída registrada"
+        elif info["media_semanal_g"] is None:
+            media_str, base = "—", "Histórico insuficiente (menos de 1 semana)"
+        else:
+            media_str = f"{info['media_semanal_g']:,.1f}"
+            base = f"{info['semanas_historico']:.1f} semanas de histórico"
+        linhas.append(
+            {
+                "Material": f["material"],
+                "Cor": f["cor"],
+                "Saldo atual (kg)": round(f["saldo_g"] / 1000, 3),
+                "Uso médio semanal (g)": media_str,
+                "Base de cálculo": base,
+            }
+        )
+    return pd.DataFrame(linhas)
+
+
+@st.fragment(run_every=INTERVALO_ATUALIZACAO_S)
+def _painel_analise():
+    """Todo o conteúdo da aba Análise roda como fragmento com
+    auto-atualização — a cada `INTERVALO_ATUALIZACAO_S` segundos ele
+    reconsulta o banco sozinho, sem recarregar o resto da página nem perder
+    o que está preenchido nas outras abas. Assim, um lançamento feito por
+    outra pessoa (ou outra aba do navegador) aparece aqui sem ação manual."""
+    conn = conectar()
+    saldo_material = [dict(m) for m in estoque.saldo_por_material(conn)]
+    uso_por_id = estoque.uso_medio_semanal(conn)
+    filamentos_analise = [dict(f) for f in estoque.listar_filamentos(conn)]
+    conn.close()
+
+    with st.container(key="card_escuro_grafico"):
+        _titulo_secao("insights", "Estoque por material")
+        st.markdown(
+            f'<div class="ctp-caption-escuro"><span class="ctp-live-dot"></span>'
+            f"Ao vivo — atualiza sozinho a cada {INTERVALO_ATUALIZACAO_S}s "
+            f'(última leitura {datetime.datetime.now():%H:%M:%S})</div>',
+            unsafe_allow_html=True,
+        )
+        if saldo_material:
+            st.plotly_chart(
+                _grafico_estoque_por_material(saldo_material),
+                width="stretch",
+                config={"displayModeBar": False},
+            )
+        else:
+            st.markdown(
+                '<div class="ctp-caption-escuro">Nenhum filamento cadastrado ainda.</div>',
+                unsafe_allow_html=True,
+            )
+
+    with st.container(key="card_uso_medio"):
+        _titulo_secao("monitoring", "Uso médio semanal por filamento")
+        st.caption(
+            "Média sobre todo o histórico de saídas registradas em "
+            "\"Registrar entrada/saída\": total retirado dividido pelo "
+            "número de semanas desde a primeira saída daquele filamento."
+        )
+        if not filamentos_analise:
+            st.caption("Nenhum filamento cadastrado ainda.")
+        else:
+            busca_analise = st.text_input(
+                "Buscar", placeholder="Filtrar por material ou cor…",
+                label_visibility="collapsed", key="busca_analise", icon=":material/search:",
+            )
+            filtrados_analise = filamentos_analise
+            if busca_analise.strip():
+                alvo = busca_analise.strip().lower()
+                filtrados_analise = [
+                    f for f in filamentos_analise
+                    if alvo in f["material"].lower() or alvo in f["cor"].lower()
+                ]
+            if filtrados_analise:
+                st.dataframe(
+                    _tabela_uso_medio(filtrados_analise, uso_por_id),
+                    hide_index=True,
+                    width="stretch",
+                    column_config={
+                        "Saldo atual (kg)": st.column_config.NumberColumn(format="%,.2f"),
+                    },
+                )
+            else:
+                st.caption(f"Nenhum filamento bate com \"{busca_analise}\".")
+
+
+with aba_analise:
+    _painel_analise()

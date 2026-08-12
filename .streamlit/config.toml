@@ -1,13 +1,35 @@
 # Tema visual e configuração de UI da Cilla Tech Park.
-# Fixo (não segue tema claro/escuro do sistema do usuário) de propósito: um
-# sistema corporativo com marca própria não deve mudar de cara dependendo do
-# SO de quem abre — a identidade visual tem que ser sempre a mesma.
+# Até 10/08/2026 o tema era fixo em claro, de propósito (marca consistente
+# pra todo mundo). Pedido explícito do dono do sistema nessa data: adicionar
+# opção de tema escuro. Os dois temas (`[theme.light]`/`[theme.dark]`) usam
+# o mecanismo nativo do Streamlit — trocar no menu "☰" (canto superior
+# direito) → Settings → Theme reflui a tela inteira (inclusive tabelas,
+# botões e campos, que CSS customizado não alcança). `[theme]` só guarda o
+# que é igual nos dois modos (tipografia/raio/borda de widget); cor vai nas
+# subseções.
 #
 # Paleta/tipografia/ícones seguem o plano em DESIGN.md — mudar um valor
 # aqui sem atualizar aquele arquivo desalinha o guia da implementação real.
 [theme]
 base = "light"
 
+# Inter via Google Fonts, com fallback caso a rede falhe — família comum em
+# dashboard corporativo/B2B, com números tabulares (dígito alinha com
+# dígito em coluna). Igual nos dois temas.
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap, system-ui, sans-serif"
+
+# só h3 (usado nos títulos de seção via st.subheader) muda de tamanho — h1
+# e h2 ficam nos valores padrão do Streamlit (não usamos h1/h2 na tela).
+headingFontSizes = ["2.75rem", "2.25rem", "1.0625rem"]
+
+# KPI menor que o padrão (2.25rem) — painel operacional denso, não número
+# de vitrine.
+metricValueFontSize = "1.75rem"
+
+baseRadius = "0.5rem"
+showWidgetBorder = true
+
+[theme.light]
 # Paleta alinhada ao Espaço Maker CTP (espa-o-maker.vercel.app), outro
 # sistema interno da Cilla Tech Park — extraída das variáveis CSS reais do
 # site em 29/07/2026, não aproximada visualmente. Ver DESIGN.md.
@@ -26,33 +48,51 @@ orangeTextColor = "#a15c00"
 orangeBackgroundColor = "#fdf3e3"
 yellowTextColor = "#a15c00"
 yellowBackgroundColor = "#fdf3e3"
-# sucesso agora na família "lime" do Espaço Maker CTP (pedido explícito do
+# sucesso na família "lime" do Espaço Maker CTP (pedido explícito do
 # usuário: lime só em status/sucesso) — fundo é o --ctp-lime-muted real
 # deles (#d4f89e); texto é um verde-oliva escuro do mesmo matiz, não o
 # lime puro (#a1f01f reprova contraste como cor de texto em fundo claro).
 greenTextColor = "#3f6212"
 greenBackgroundColor = "#d4f89e"
 
-# Inter via Google Fonts, com fallback caso a rede falhe — família comum em
-# dashboard corporativo/B2B, com números tabulares (dígito alinha com
-# dígito em coluna).
-font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap, system-ui, sans-serif"
-
-# só h3 (usado nos títulos de seção via st.subheader) muda de tamanho — h1
-# e h2 ficam nos valores padrão do Streamlit (não usamos h1/h2 na tela).
-headingFontSizes = ["2.75rem", "2.25rem", "1.0625rem"]
-
-# KPI menor que o padrão (2.25rem) — painel operacional denso, não número
-# de vitrine.
-metricValueFontSize = "1.75rem"
-
-baseRadius = "0.5rem"
-showWidgetBorder = true
-
 dataframeBorderColor = "#e2e8f0"
 dataframeHeaderBackgroundColor = "#f6f8fb"
 
+[theme.dark]
+# Não é uma tradução 1:1 do claro — cada cor foi conferida com o validador
+# de contraste da skill de dataviz contra o fundo `#0a1628` antes de entrar
+# aqui (todas ≥ 4.5:1, a maioria acima de 7:1). `base` só é uma chave válida
+# dentro de `[theme]` (testado — Streamlit rejeita `theme.dark.base` com
+# aviso), não dá pra herdar o escuro nativo do Streamlit pra chaves não
+# listadas aqui; por isso toda cor que este app realmente usa (widgets,
+# tabela, alertas) está explícita nas duas seções — o que fica de fora
+# (linkColor, cores de código, paleta de `st.bar_chart` nativo) não aparece
+# em nenhuma tela do sistema.
+primaryColor = "#3987e5"
+backgroundColor = "#0a1628"
+secondaryBackgroundColor = "#13233a"
+textColor = "#f2f5f9"
+borderColor = "#24354c"
+
+redTextColor = "#ff8a8a"
+redBackgroundColor = "#3a1518"
+orangeTextColor = "#ffb84d"
+orangeBackgroundColor = "#3a2a10"
+yellowTextColor = "#ffb84d"
+yellowBackgroundColor = "#3a2a10"
+# lime como texto direto funciona aqui (12.9:1 contra o fundo escuro) — a
+# ressalva do tema claro ("lime nunca como cor de texto") era só sobre
+# fundo claro, onde o lime puro reprova contraste.
+greenTextColor = "#a1f01f"
+greenBackgroundColor = "#1f2e0a"
+
+dataframeBorderColor = "#24354c"
+dataframeHeaderBackgroundColor = "#17293f"
+
 [client]
-# some o menu "⋮" e o botão "Deploy" — são chrome de ambiente de
-# desenvolvimento do Streamlit, não fazem sentido pra quem só usa o sistema.
-toolbarMode = "minimal"
+# "viewer" (não "minimal"): mantém escondidos os botões de desenvolvedor
+# (Deploy, Rerun, Clear cache — o motivo original de esconder o menu) mas
+# devolve as opções de visitante, entre elas o seletor de tema Light/Dark
+# que este arquivo agora oferece. Sem isso não haveria como o usuário
+# alcançar o tema escuro pela interface.
+toolbarMode = "viewer"

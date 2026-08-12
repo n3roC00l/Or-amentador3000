@@ -1,5 +1,28 @@
 # Estoque e Cotação de Filamentos — Cilla Tech Park
 
+## Aba Análise, alerta de saldo por cor, tema escuro e logotipo (10-12/08/2026)
+
+Sequência de pedidos do dono do sistema. Resumo (detalhe de paleta e
+contraste em `DESIGN.md`):
+
+- **Aba Análise**: gráfico de estoque por material (painel escuro "centro
+  de controle", atualiza sozinho a cada 15s via `st.fragment`) e tabela de
+  uso médio semanal por filamento — calculado sobre o histórico de saídas
+  (`estoque.uso_medio_semanal`), fica vazia até haver saída registrada em
+  vez de mostrar "0" enganoso.
+- **Alerta de saldo por cor** na tabela da aba Estoque: linha inteira em
+  vermelho/amarelo/verde conforme o saldo (< 1kg / 1-3kg / > 3kg),
+  reaproveitando as cores semânticas já usadas em erro/atenção/sucesso.
+- **Tema escuro**: opção no menu nativo do Streamlit ("☰" → Settings →
+  Theme). Substitui o tema fixo em claro que existia desde 29/07/2026.
+- **Logotipo** da empresa no cabeçalho (`logo.jpg`).
+
+Dois bugs reais encontrados e corrigidos durante o trabalho: `st.dataframe`
+mostrava o texto literal "None" em vez de célula em branco pra valores
+ausentes em colunas numéricas formatadas (contornado virando a coluna em
+texto pré-formatado); e um marcador decorativo no gráfico da aba Análise
+sobrepunha o primeiro dígito do rótulo de valor (removido).
+
 ## Reformulação visual completa (29/07/2026, fim de tarde)
 
 Pedido explícito: zero emoji, hierarquia tipográfica real, cards com
